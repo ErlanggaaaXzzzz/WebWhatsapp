@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard WA Debugger By Erlangga</title>
+    <title>Dashboard WA Debugger Professional</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         :root {
@@ -21,40 +21,39 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
         body { background-color: var(--bg); color: var(--text); display: flex; min-height: 100vh; overflow: hidden; }
         
-        /* Sidebar Responsive Layout */
+        /* Sidebar Layout */
         .sidebar { width: 280px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px; justify-content: space-between; z-index: 10; transition: transform 0.3s ease; }
         .brand { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: 1px; display: flex; align-items: center; gap: 10px; margin-bottom: 40px; }
         .brand span { color: var(--primary); text-shadow: 0 0 10px var(--primary-glow); }
         .menu-items { display: flex; flex-direction: column; gap: 8px; }
-        .menu-btn { padding: 14px 18px; border-radius: 8px; border: none; background: transparent; color: var(--text-muted); text-align: left; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 12px; }
+        .menu-btn { padding: 14px 18px; border-radius: 8px; border: none; background: transparent; color: var(--text-muted); text-align: left; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 12px; width: 100%; }
         .menu-btn:hover, .menu-btn.active { background: rgba(255, 255, 255, 0.03); color: var(--primary); border-left: 3px solid var(--primary); padding-left: 15px; }
         
-        /* Main Panel */
+        /* Main Dashboard Panel */
         .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #0f172a; }
-        .topbar { height: 75px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 40px; background: var(--sidebar-bg); }
+        .topbar { height: 75px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 40px; background: var(--sidebar-bg); flex-shrink: 0; }
         .user-profile { display: flex; align-items: center; gap: 15px; }
         .session-badge { background: rgba(255, 255, 255, 0.02); padding: 8px 16px; border-radius: 30px; border: 1px solid var(--border); font-size: 13px; font-family: monospace; }
         .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; transition: all 0.3s ease; }
         
-        /* State Status Color Indicators */
         .status-dot.connected { background: var(--primary); box-shadow: 0 0 12px var(--primary); }
         .status-dot.connecting { background: var(--warning); box-shadow: 0 0 12px var(--warning); }
         .status-dot.disconnected { background: var(--danger); box-shadow: 0 0 12px var(--danger); }
         
-        /* Content Area */
+        /* Panes Navigation View */
         .view-pane { flex: 1; padding: 40px; overflow-y: auto; display: none; opacity: 0; transition: opacity 0.2s ease; }
         .view-pane.active { display: block; opacity: 1; }
         
-        /* Grid Metrik Profesional */
-        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; margin-bottom: 35px; }
+        /* Metrics Architecture */
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; margin-bottom: 35px; }
         .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); position: relative; overflow: hidden; }
         .card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: transparent; }
         .card.active-card::before { background: var(--primary); }
         .card h4 { color: var(--text-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
         .card .value { font-size: 28px; font-weight: 700; color: #fff; }
         
-        /* Terminal Ide Console Workspace */
-        .console-container { display: flex; flex-direction: column; background: #05070c; border: 1px solid var(--border); border-radius: 12px; height: 550px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5); }
+        /* Virtual Terminal Console Workspace */
+        .console-container { display: flex; flex-direction: column; background: #05070c; border: 1px solid var(--border); border-radius: 12px; height: 500px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5); }
         .console-header { background: #090d16; padding: 14px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .console-logs { flex: 1; overflow-y: auto; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; padding: 20px; line-height: 1.7; color: #e2e8f0; }
         .log-row { margin-bottom: 6px; white-space: pre-wrap; word-break: break-all; border-bottom: 1px solid rgba(255, 255, 255, 0.01); padding-bottom: 6px; }
@@ -64,12 +63,14 @@
         .log-message { color: #c084fc; }
         .log-event { color: #34d399; }
 
-        /* Component Tools & Actions */
+        /* Form Components & Utilities */
         .tools-bar { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; align-items: center; }
-        .search-input, .input-field { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; color: #fff; font-size: 14px; transition: all 0.2s; width: 100%; }
-        .search-input:focus, .input-field:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 10px var(--primary-glow); }
+        .search-input, .input-field, .select-field, .textarea-field { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; color: #fff; font-size: 14px; transition: all 0.2s; width: 100%; }
+        .search-input:focus, .input-field:focus, .select-field:focus, .textarea-field:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 10px var(--primary-glow); }
         .search-input { flex: 1; }
-        .btn { background: var(--primary); color: #030712; padding: 12px 24px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s ease; font-size: 14px; }
+        .textarea-field { height: 120px; resize: vertical; font-family: monospace; }
+        
+        .btn { background: var(--primary); color: #030712; padding: 12px 24px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s ease; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; justify-content: center; }
         .btn:hover { box-shadow: 0 4px 12px var(--primary-glow); transform: translateY(-1px); }
         .btn-danger { background: var(--danger); color: white; }
         .btn-secondary { background: #374151; color: white; }
@@ -79,25 +80,25 @@
         .filter-item { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: var(--text-muted); }
         .filter-item input[type="checkbox"] { accent-color: var(--primary); }
         
-        /* Box Media Connectivity */
+        /* Sandbox Workspace Layout */
+        .sandbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        .sandbox-card { background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 12px; padding: 30px; }
+
         .connection-box { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; }
         .qr-pane { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 14px; padding: 40px; min-height: 350px; text-align: center; }
         #qrImage { background: white; padding: 12px; border-radius: 10px; margin-top: 20px; display: none; max-width: 240px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
         .pairing-code-display { font-size: 34px; font-family: 'Courier New', monospace; letter-spacing: 6px; color: var(--primary); margin-top: 24px; font-weight: 800; background: #030712; padding: 14px 28px; border-radius: 10px; display: none; border: 1px dashed rgba(0,255,135,0.3); text-shadow: 0 0 10px var(--primary-glow); }
         
-        /* Table Workspace */
         .session-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: var(--sidebar-bg); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
         .session-table th, .session-table td { text-align: left; padding: 16px 24px; border-bottom: 1px solid var(--border); }
         .session-table th { color: var(--text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; background: #1f2937; }
 
-        /* Hamburger Menu untuk Mode Mobile */
         .menu-toggle { display: none; background: transparent; border: none; color: white; font-size: 24px; cursor: pointer; }
 
-        /* Responsive Layout Adapter Engine (Desktop vs Mobile Mode) */
+        /* Responsive Adaptor Engine */
         @media(max-width: 1024px) {
-            .connection-box { grid-template-columns: 1fr; }
+            .connection-box, .sandbox-grid { grid-template-columns: 1fr; }
         }
-
         @media(max-width: 768px) {
             body { flex-direction: column; }
             .menu-toggle { display: block; }
@@ -123,6 +124,7 @@
                 <button class="menu-btn active" id="btn-dashboard" onclick="switchView('dashboard')">🏠 Dashboard</button>
                 <button class="menu-btn" id="btn-connect" onclick="switchView('connect')">🔌 Connect WhatsApp</button>
                 <button class="menu-btn" id="btn-liveDebug" onclick="switchView('liveDebug')">🛡️ Live Debug</button>
+                <button class="menu-btn" id="btn-apiTester" onclick="switchView('apiTester')">🧪 API Sandbox Tester</button>
                 <button class="menu-btn" id="id-sessionMgr" onclick="switchView('sessionMgr')">⚙️ My Sessions</button>
             </nav>
         </div>
@@ -162,6 +164,10 @@
                 <div class="card">
                     <h4>Total Events</h4>
                     <div class="value" id="cardEvents">0</div>
+                </div>
+                <div class="card">
+                    <h4>Uptime Runtime</h4>
+                    <div class="value" id="cardRuntime" style="font-family: monospace; color:#38bdf8;">00:00:00</div>
                 </div>
             </div>
             <div class="card">
@@ -221,9 +227,42 @@
             <div class="console-container">
                 <div class="console-header">
                     <span style="font-family: monospace; font-size:13px; color:var(--primary); font-weight:600;">terminal@wa-debugger:~</span>
-                    <span style="font-size:12px; color: var(--text-muted); display:flex; align-items:center; gap:6px;"><span style="width:6px; height:6px; background:var(--primary); border-radius:50%; display:inline-block; animation: blink 1s infinite;"></span> Auto-Scroll Active</span>
+                    <span style="font-size:12px; color: var(--text-muted); display:flex; align-items:center; gap:6px;">Auto-Scroll Active</span>
                 </div>
                 <div class="console-logs" id="consoleLogs"></div>
+            </div>
+        </div>
+
+        <div id="view-apiTester" class="view-pane">
+            <h2 style="font-weight: 700; margin-bottom: 8px;">API Message Sandbox</h2>
+            <p style="color: var(--text-muted); margin-bottom: 30px;">Uji coba fungsionalitas pengiriman muatan pesan WhatsApp secara langsung.</p>
+            
+            <div class="sandbox-grid">
+                <div class="sandbox-card">
+                    <h3 style="margin-bottom: 20px; font-weight: 600; color: #fff;">Form Pembuat Pesan</h3>
+                    <div style="display:flex; flex-direction:column; gap:18px;">
+                        <div>
+                            <label style="display:block; margin-bottom:8px; font-size:13px; color:var(--text-muted); font-weight:600;">Nomor Tujuan (JID)</label>
+                            <input type="text" id="sandboxTarget" class="input-field" placeholder="Contoh: 628xxxxxxxxxx@s.whatsapp.net atau id_grup@g.us">
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom:8px; font-size:13px; color:var(--text-muted); font-weight:600;">Tipe Payload</label>
+                            <select id="sandboxType" class="select-field">
+                                <option value="text">Pesan Teks (conversation)</option>
+                                <option value="json">Raw JSON Message Object</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom:8px; font-size:13px; color:var(--text-muted); font-weight:600;">Konten Pesan / JSON Payload Body</label>
+                            <textarea id="sandboxContent" class="textarea-field" placeholder="Ketik teks pesan di sini, atau tulis skema object JSON mentah..."></textarea>
+                        </div>
+                        <button class="btn" onclick="sendSandboxMessage()" style="margin-top: 10px;">⚡ Eksekusi Kirim Pesan</button>
+                    </div>
+                </div>
+                <div class="sandbox-card" style="display:flex; flex-direction:column;">
+                    <h3 style="margin-bottom: 20px; font-weight: 600; color: #fff;">Sandbox Output Log</h3>
+                    <div id="sandboxResponse" style="flex:1; background:#05070c; border:1px solid var(--border); border-radius:8px; padding:20px; font-family:monospace; font-size:13px; color:#34d399; overflow-y:auto; min-height: 250px; white-space: pre-wrap;">Menunggu eksekusi perintah...</div>
+                </div>
             </div>
         </div>
 
@@ -249,8 +288,5 @@
     </div>
 
     <script src="/script.js"></script>
-    <script>
-        @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
-    </script>
 </body>
 </html>
