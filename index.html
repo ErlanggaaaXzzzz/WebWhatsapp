@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard WA Debugger Professional</title>
+    <title>Dashboard WA Debugger By Erlangga</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         :root {
@@ -21,7 +21,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
         body { background-color: var(--bg); color: var(--text); display: flex; min-height: 100vh; overflow: hidden; }
         
-        /* Sidebar Layout */
+        /* Sidebar Responsive Layout */
         .sidebar { width: 280px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px; justify-content: space-between; z-index: 10; transition: transform 0.3s ease; }
         .brand { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: 1px; display: flex; align-items: center; gap: 10px; margin-bottom: 40px; }
         .brand span { color: var(--primary); text-shadow: 0 0 10px var(--primary-glow); }
@@ -29,13 +29,13 @@
         .menu-btn { padding: 14px 18px; border-radius: 8px; border: none; background: transparent; color: var(--text-muted); text-align: left; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 12px; width: 100%; }
         .menu-btn:hover, .menu-btn.active { background: rgba(255, 255, 255, 0.03); color: var(--primary); border-left: 3px solid var(--primary); padding-left: 15px; }
         
-        /* Main Dashboard Panel */
+        /* Main Panel */
         .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #0f172a; }
         .topbar { height: 75px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 40px; background: var(--sidebar-bg); flex-shrink: 0; }
         .user-profile { display: flex; align-items: center; gap: 15px; }
         .session-badge { background: rgba(255, 255, 255, 0.02); padding: 8px 16px; border-radius: 30px; border: 1px solid var(--border); font-size: 13px; font-family: monospace; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; transition: all 0.3s ease; }
         
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; transition: all 0.3s ease; }
         .status-dot.connected { background: var(--primary); box-shadow: 0 0 12px var(--primary); }
         .status-dot.connecting { background: var(--warning); box-shadow: 0 0 12px var(--warning); }
         .status-dot.disconnected { background: var(--danger); box-shadow: 0 0 12px var(--danger); }
@@ -44,7 +44,7 @@
         .view-pane { flex: 1; padding: 40px; overflow-y: auto; display: none; opacity: 0; transition: opacity 0.2s ease; }
         .view-pane.active { display: block; opacity: 1; }
         
-        /* Metrics Architecture */
+        /* Metrics Grid */
         .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; margin-bottom: 35px; }
         .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); position: relative; overflow: hidden; }
         .card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: transparent; }
@@ -52,7 +52,7 @@
         .card h4 { color: var(--text-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
         .card .value { font-size: 28px; font-weight: 700; color: #fff; }
         
-        /* Virtual Terminal Console Workspace */
+        /* Console Logs */
         .console-container { display: flex; flex-direction: column; background: #05070c; border: 1px solid var(--border); border-radius: 12px; height: 500px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5); }
         .console-header { background: #090d16; padding: 14px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .console-logs { flex: 1; overflow-y: auto; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; padding: 20px; line-height: 1.7; color: #e2e8f0; }
@@ -62,17 +62,11 @@
         .log-error { color: var(--danger); }
         .log-message { color: #c084fc; }
         .log-event { color: #34d399; }
-        
-        /* JID Highlighter & Copy utility */
-        .jid-clickable { color: #f43f5e; font-weight: 600; cursor: pointer; text-decoration: underline; background: rgba(244, 63, 94, 0.1); padding: 1px 4px; border-radius: 4px; }
-        .jid-clickable:hover { background: rgba(244, 63, 94, 0.2); color: #fda4af; }
 
-        /* Form Components & Utilities */
+        /* Tools Utilities & Filter */
         .tools-bar { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; align-items: center; }
-        .search-input, .input-field, .select-field, .textarea-field { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; color: #fff; font-size: 14px; transition: all 0.2s; width: 100%; }
-        .search-input:focus, .input-field:focus, .select-field:focus, .textarea-field:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 10px var(--primary-glow); }
-        .search-input { flex: 1; }
-        .textarea-field { height: 120px; resize: vertical; font-family: monospace; }
+        .search-input { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; color: #fff; font-size: 14px; transition: all 0.2s; flex: 1; }
+        .search-input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 10px var(--primary-glow); }
         
         .btn { background: var(--primary); color: #030712; padding: 12px 24px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s ease; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; justify-content: center; }
         .btn:hover { box-shadow: 0 4px 12px var(--primary-glow); transform: translateY(-1px); }
@@ -84,25 +78,13 @@
         .filter-item { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: var(--text-muted); }
         .filter-item input[type="checkbox"] { accent-color: var(--primary); }
         
-        /* Sandbox Workspace Layout */
-        .sandbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
-        .sandbox-card { background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 12px; padding: 30px; }
-
-        .connection-box { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; }
-        .qr-pane { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 14px; padding: 40px; min-height: 350px; text-align: center; }
-        #qrImage { background: white; padding: 12px; border-radius: 10px; margin-top: 20px; display: none; max-width: 240px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-        .pairing-code-display { font-size: 34px; font-family: 'Courier New', monospace; letter-spacing: 6px; color: var(--primary); margin-top: 24px; font-weight: 800; background: #030712; padding: 14px 28px; border-radius: 10px; display: none; border: 1px dashed rgba(0,255,135,0.3); text-shadow: 0 0 10px var(--primary-glow); }
-        
         .session-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: var(--sidebar-bg); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
         .session-table th, .session-table td { text-align: left; padding: 16px 24px; border-bottom: 1px solid var(--border); }
         .session-table th { color: var(--text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; background: #1f2937; }
 
         .menu-toggle { display: none; background: transparent; border: none; color: white; font-size: 24px; cursor: pointer; }
 
-        /* Responsive Adaptor Engine */
-        @media(max-width: 1024px) {
-            .connection-box, .sandbox-grid { grid-template-columns: 1fr; }
-        }
+        /* Responsive Mobile Layout Engine */
         @media(max-width: 768px) {
             body { flex-direction: column; }
             .menu-toggle { display: block; }
@@ -114,8 +96,6 @@
         }
         @media(max-width: 480px) {
             .metrics-grid { grid-template-columns: 1fr; }
-            .topbar { height: auto; padding: 15px 20px; flex-direction: column; gap: 10px; align-items: flex-start; }
-            .user-profile { width: 100%; justify-content: space-between; }
         }
     </style>
 </head>
@@ -124,164 +104,77 @@
     <div class="sidebar" id="appSidebar">
         <div>
             <div class="brand"><span>WA</span> DEBUGGER</div>
-            <nav class="menu-items">
-                <button class="menu-btn active" id="btn-dashboard" onclick="switchView('dashboard')">🏠 Dashboard</button>
-                <button class="menu-btn" id="btn-connect" onclick="switchView('connect')">🔌 Connect WhatsApp</button>
-                <button class="menu-btn" id="btn-liveDebug" onclick="switchView('liveDebug')">🛡️ Live Debug</button>
-                <button class="menu-btn" id="btn-apiTester" onclick="switchView('apiTester')">🧪 API Sandbox Tester</button>
-                <button class="menu-btn" id="id-sessionMgr" onclick="switchView('sessionMgr')">⚙️ My Sessions</button>
-            </nav>
+            <div class="menu-items">
+                <button class="menu-btn active" id="btn-dashboard" onclick="switchView('dashboard')">📟 Realtime Dashboard</button>
+                <button class="menu-btn" id="btn-sessionMgr" onclick="switchView('sessionMgr')">⚙️ Session Management</button>
+            </div>
         </div>
-        <button class="menu-btn btn-danger" onclick="logout()" style="color: white; justify-content: center; margin-top: 20px;">🚪 Logout</button>
+        <div>
+            <button class="menu-btn" style="color: var(--danger);" onclick="logout()">🚪 Keluar Aplikasi</button>
+        </div>
     </div>
 
     <div class="main-content">
         <div class="topbar">
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
-                <div class="user-profile">
-                    <span id="topUsername" style="font-weight: 600;">erlanggax</span>
-                    <span class="session-badge">Active Sesi: <span id="topSessionId" style="color:var(--primary); font-weight:600;">erlanggax</span></span>
-                </div>
+            <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+            <div class="session-badge">
+                SESSION ID: <span id="topSessionId" style="color:var(--primary); font-weight:700;">Loading...</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 12px; background: rgba(0,0,0,0.2); padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);">
-                <span id="statusDot" class="status-dot disconnected"></span>
-                <span id="statusText" style="font-size: 13px; font-weight: 700; color: #ef4444; letter-spacing: 0.5px;">DISCONNECTED</span>
+            <div class="user-profile">
+                <span id="topUsername" style="font-weight: 600; font-size: 14px;">User</span>
+                <span class="status-dot disconnected" id="statusDot"></span>
+                <span id="statusText" style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px;">DISCONNECTED</span>
             </div>
         </div>
 
         <div id="view-dashboard" class="view-pane active">
-            <h2 style="margin-bottom: 24px; font-weight: 700;">Overview Engine</h2>
             <div class="metrics-grid">
                 <div class="card active-card">
-                    <h4>Status Sesi</h4>
-                    <div class="value" id="cardStatus" style="color: #ef4444;">DISCONNECTED</div>
+                    <h4>WhatsApp Status</h4>
+                    <div class="value" id="cardStatus" style="font-size: 20px; color: var(--danger);">DISCONNECTED</div>
                 </div>
                 <div class="card">
-                    <h4>Total Messages</h4>
+                    <h4>Pesan Masuk (Realtime)</h4>
                     <div class="value" id="cardMessages">0</div>
                 </div>
                 <div class="card">
-                    <h4>Total Groups</h4>
+                    <h4>Group Updates</h4>
                     <div class="value" id="cardGroups">0</div>
                 </div>
                 <div class="card">
-                    <h4>Total Events</h4>
+                    <h4>Total Event Stream</h4>
                     <div class="value" id="cardEvents">0</div>
                 </div>
-                <div class="card">
-                    <h4>Uptime Runtime</h4>
-                    <div class="value" id="cardRuntime" style="font-family: monospace; color:#38bdf8;">00:00:00</div>
-                </div>
             </div>
-            <div class="card">
-                <h3 style="margin-bottom:10px; font-weight:600;">Core Pipeline Monitor</h3>
-                <p style="color: var(--text-muted); font-size:14px; line-height:1.7;">Selamat datang di dashboard monitoring Baileys API Workspace. Seluruh data transaksi, siklus handshake soket, pembaruan status pesan, dan penanganan autentikasi terarsip secara terperinci.</p>
-            </div>
-        </div>
 
-        <div id="view-connect" class="view-pane">
-            <h2 style="font-weight: 700;">Konektivitas Device</h2>
-            <p style="color: var(--text-muted); margin-bottom: 24px;">Silakan klik tombol Inisialisasi terlebih dahulu untuk menyalakan mesin soket Baileys di server cloud.</p>
-            
             <div class="tools-bar">
-                <button class="btn" onclick="initiateSession()">🚀 Inisialisasi Mesin Sesi</button>
+                <input type="text" class="search-input" id="logSearchInput" placeholder="Cari konten teks payload spesifik di sini..." oninput="filterLogs()">
+                <button class="btn btn-secondary" onclick="exportFilteredLogs()">📥 Ekspor Raw Log (.json)</button>
+                <button class="btn btn-danger" style="padding: 12px 18px;" onclick="clearConsole()">🗑️ Clear</button>
             </div>
 
-            <div class="connection-box">
-                <div class="qr-pane">
-                    <h3 style="font-weight:600;">Metode A: QR Code</h3>
-                    <p style="color: var(--text-muted); font-size:13px; margin-top:6px;">Scan kode matriks QR berikut secara langsung lewat menu Perangkat Tertaut di aplikasi WA HP Anda.</p>
-                    <button class="btn btn-secondary" style="margin-top:20px;" onclick="requestQR()">🔄 Generate QR Code</button>
-                    <img id="qrImage" alt="WA QR Code">
-                    <p id="qrStateText" style="margin-top:15px; font-size:13px; color:var(--text-muted);"></p>
-                </div>
-                <div class="qr-pane">
-                    <h3 style="font-weight:600;">Metode B: Pairing Code</h3>
-                    <p style="color: var(--text-muted); font-size:13px; margin-top:6px;">Masukkan nomor WhatsApp tujuan berformat kode negara internasional (Contoh: 628135842613)</p>
-                    <input type="text" id="pairingPhone" class="input-field" placeholder="Contoh: 628xxxxxxxxxx" style="margin-top:20px; width:85%; text-align:center; font-weight: 600; font-size: 15px;">
-                    <button class="btn btn-secondary" style="margin-top:20px;" onclick="requestPairingCode()">🔑 Generate Pairing Code</button>
-                    <div class="pairing-code-display" id="pairingCodeContainer">- - - - - - - -</div>
-                </div>
-            </div>
-        </div>
-
-        <div id="view-liveDebug" class="view-pane">
-            <h2 style="font-weight: 700;">Realtime Engine Debugger</h2>
-            <p style="color: var(--text-muted); margin-bottom: 24px;">Aliran data mentah dari pipeline event listener WhatsApp Socket Server secara live.</p>
-            
-            <div class="tools-bar">
-                <input type="text" id="logSearch" class="search-input" placeholder="Cari Log berdasarkan kata kunci, event, nomor HP, payload ID..." oninput="filterLogs()">
-                <button class="btn btn-secondary" onclick="clearConsole()">🧹 Clear Console</button>
-                <button class="btn" onclick="downloadLogs()">💾 Download JSON Log</button>
-            </div>
-
-            <div class="tools-bar" style="background: rgba(255,255,255,0.01); padding: 12px 20px; border-radius:10px; border: 1px solid var(--border); justify-content: space-between;">
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <span style="font-size:13px; color: var(--text-muted); font-weight:700;">Filter Event:</span>
-                    <div class="filter-group">
-                        <label class="filter-item"><input type="checkbox" id="f-msg" checked onchange="filterLogs()"> Messages</label>
-                        <label class="filter-item"><input type="checkbox" id="f-grp" checked onchange="filterLogs()"> Groups</label>
-                        <label class="filter-item"><input type="checkbox" id="f-prs" checked onchange="filterLogs()"> Presence</label>
-                        <label class="filter-item"><input type="checkbox" id="f-cal" checked onchange="filterLogs()"> Calls</label>
-                        <label class="filter-item"><input type="checkbox" id="f-con" checked onchange="filterLogs()"> Connection</label>
-                        <label class="filter-item"><input type="checkbox" id="f-cnt" checked onchange="filterLogs()"> Contacts</label>
-                    </div>
-                </div>
-                <div class="filter-group">
-                    <label class="filter-item"><input type="checkbox" id="audioToggle" checked> 🔊 Audio Notification</label>
-                </div>
+            <div class="filter-group" style="margin-bottom: 25px;">
+                <label class="filter-item"><input type="checkbox" id="chk-info" checked onchange="filterLogs()"> System Info</label>
+                <label class="filter-item"><input type="checkbox" id="chk-messages.upsert" checked onchange="filterLogs()"> Messages</label>
+                <label class="filter-item"><input type="checkbox" id="chk-groups" checked onchange="filterLogs()"> Groups</label>
+                <label class="filter-item"><input type="checkbox" id="chk-presence" checked onchange="filterLogs()"> Presence</label>
+                <label class="filter-item"><input type="checkbox" id="chk-call" checked onchange="filterLogs()"> Calls</label>
+                <label class="filter-item"><input type="checkbox" id="chk-connection" checked onchange="filterLogs()"> Connections</label>
+                <label class="filter-item"><input type="checkbox" id="chk-contacts" checked onchange="filterLogs()"> Contacts</label>
             </div>
 
             <div class="console-container">
                 <div class="console-header">
                     <span style="font-family: monospace; font-size:13px; color:var(--primary); font-weight:600;">terminal@wa-debugger:~</span>
-                    <span style="font-size:12px; color: var(--text-muted); display:flex; align-items:center; gap:6px;">Click JID highlight inside log to auto-copy</span>
+                    <span style="font-size:12px; color: var(--text-muted); display:flex; align-items:center; gap:6px;"><span style="width:6px; height:6px; background:var(--primary); border-radius:50%; display:inline-block; animation: blink 1s infinite;"></span> Auto-Scroll Active</span>
                 </div>
                 <div class="console-logs" id="consoleLogs"></div>
             </div>
         </div>
 
-        <div id="view-apiTester" class="view-pane">
-            <h2 style="font-weight: 700; margin-bottom: 8px;">API Message Sandbox</h2>
-            <p style="color: var(--text-muted); margin-bottom: 30px;">Uji coba fungsionalitas pengiriman muatan pesan WhatsApp secara langsung.</p>
-            
-            <div class="sandbox-grid">
-                <div class="sandbox-card">
-                    <h3 style="margin-bottom: 20px; font-weight: 600; color: #fff;">Form Pembuat Pesan</h3>
-                    <div style="display:flex; flex-direction:column; gap:18px;">
-                        <div>
-                            <label style="display:block; margin-bottom:8px; font-size:13px; color:var(--text-muted); font-weight:600;">Nomor Tujuan (JID)</label>
-                            <input type="text" id="sandboxTarget" class="input-field" placeholder="Contoh: 628xxxxxxxxxx@s.whatsapp.net atau id_grup@g.us">
-                        </div>
-                        <div>
-                            <label style="display:block; margin-bottom:8px; font-size:13px; color:var(--text-muted); font-weight:600;">Tipe Payload</label>
-                            <select id="sandboxType" class="select-field">
-                                <option value="text">Pesan Teks (conversation)</option>
-                                <option value="json">Raw JSON Message Object</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display:block; margin-bottom:8px; font-size:13px; color:var(--text-muted); font-weight:600;">Konten Pesan / JSON Payload Body</label>
-                            <textarea id="sandboxContent" class="textarea-field" placeholder="Ketik teks pesan di sini, atau tulis skema object JSON mentah..."></textarea>
-                        </div>
-                        <button class="btn" onclick="sendSandboxMessage()" style="margin-top: 10px;">⚡ Eksekusi Kirim Pesan</button>
-                    </div>
-                </div>
-                <div class="sandbox-card" style="display:flex; flex-direction:column;">
-                    <h3 style="margin-bottom: 20px; font-weight: 600; color: #fff;">Sandbox Output Log</h3>
-                    <div id="sandboxResponse" style="flex:1; background:#05070c; border:1px solid var(--border); border-radius:8px; padding:20px; font-family:monospace; font-size:13px; color:#34d399; overflow-y:auto; min-height: 250px; white-space: pre-wrap;">Menunggu eksekusi perintah...</div>
-                </div>
-            </div>
-        </div>
-
         <div id="view-sessionMgr" class="view-pane">
             <h2 style="font-weight: 700;">Session Management</h2>
-            <p style="color: var(--text-muted); margin-bottom:20px;">Kelola siklus hidup, kluster runtime, isolasi file kredensial, dan pembersihan state memori lokal.</p>
-            
-            <div class="tools-bar">
-                <button class="btn btn-secondary" onclick="clearAllAppCache()">⚠️ Clear App Local Storage Cache</button>
-            </div>
+            <p style="color: var(--text-muted);">Kelola siklus hidup, kluster runtime, isolasi file kredensial, dan penghapusan token sesi.</p>
             
             <table class="session-table">
                 <thead>
@@ -291,7 +184,7 @@
                         <th>Aksi Kontrol Sesi</th>
                     </tr>
                 </thead>
-                <tbody id="sessionTableBody">
+                <tbody id=\"sessionTableBody\">
                     <tr>
                         <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 30px;">Memuat repositori session aktif...</td>
                     </tr>
@@ -301,5 +194,8 @@
     </div>
 
     <script src="/script.js"></script>
+    <script>
+        @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+    </script>
 </body>
 </html>
