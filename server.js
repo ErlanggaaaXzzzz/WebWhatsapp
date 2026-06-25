@@ -108,48 +108,64 @@ io.use((socket, next) => {
 
 // SOCKET.IO HUB PIPELINE
 io.on('connection', (socket) => {
-    const username = socket.username;
+    // Ambil username berdasarkan token jabat tangan auth socket kamu
+    const username = socket.username || "erlanggax"; 
     socket.join(username);
 
-    // Kirim status awal saat user baru konek/refresh web
+    console.log(`[Socket.IO] User ${username} terhubung ke pipa realtime.`);
+
+    // ==========================================
+    // FIX UTAMA: KETIKA WEB DI-REFRESH / LOG IN
+    // ==========================================
     if (activeSessions[username]) {
-        socket.emit('whatsapp_status', { status: activeSessions[username].status || 'disconnected' });
-        if (activeSessions[username].lastQR) {
-            socket.emit('whatsapp_qr', { qr: activeSessions[username].lastQR });
+        const session = activeSessions[username];
+        
+        // Cek status real dari objek socket Baileys
+        let currentStatus = 'disconnected';
+        if (session.sock && session.sock.user) {
+            currentStatus = 'connected';
+            session.status = 'connected';
+        } else if (session.status) {
+            currentStatus = session.status;
+        }
+
+        // Kirim status instan ke UI frontend agar tidak nge-blank saat refresh
+        socket.emit('whatsapp_status', { status: currentStatus });
+        
+        if (session.lastQR && currentStatus !== 'connected') {
+            socket.emit('whatsapp_qr', { qr: session.lastQR });
         }
     } else {
+        // Jika memang belum ada session aktif sama sekali
         socket.emit('whatsapp_status', { status: 'disconnected' });
     }
 
-    // Event: Inisialisasi Sesi Utama (Kosongan / Default tanpa pairing dulu)
+    // Handler event inisialisasi biasa
     socket.on('init_session', async () => {
-        if (activeSessions[username] && activeSessions[username].status === 'connected') {
+        if (activeSessions[username] && activeSessions[username].sock && activeSessions[username].sock.user) {
+            activeSessions[username].status = 'connected';
             return io.to(username).emit('whatsapp_status', { status: 'connected' });
         }
-        // Jalankan tanpa nomor hp (untuk standby QR atau auto-reconnect)
         startWhatsAppEngine(username, null);
     });
 
-    // Event: Request QR Code Manual (Memaksa engine refresh & dengarkan QR)
     socket.on('get_qr', () => {
-        // Jika sudah terhubung, tidak perlu QR lagi
-        if (activeSessions[username] && activeSessions[username].status === 'connected') return;
-        
-        // Buat ulang engine tanpa nomor HP untuk mentrigger event 'connection.update' membawa QR
+        if (activeSessions[username] && activeSessions[username].sock && activeSessions[username].sock.user) return;
         startWhatsAppEngine(username, null);
     });
 
-    // Event: Request Pairing Code (Memastikan socket bersih sebelum request)
     socket.on('get_pairing', async (data) => {
         if (!data.phone) return;
         let cleanPhone = data.phone.replace(/[^0-9]/g, '');
-        // Jalankan engine khusus dengan membawa nomor telepon pairing
         startWhatsAppEngine(username, cleanPhone);
     });
 
     socket.on('terminate_session', () => {
         if (activeSessions[username]) {
-            try { activeSessions[username].sock.end(); } catch(e){}
+            try { 
+                activeSessions[username].sock.ev.removeAllListeners();
+                activeSessions[username].sock.end(); 
+            } catch(e){}
             delete activeSessions[username];
         }
         const userSessionPath = path.join(SESSIONS_DIR, username);
@@ -273,7 +289,9 @@ async function startWhatsAppEngine(username, pairingPhone = null) {
             activeSessions[username].status = 'connected';
             activeSessions[username].lastQR = null;
             io.to(username).emit('whatsapp_status', { status: 'connected' });
+            console.log(`[Baileys] Sesi untuk ${username} resmi TERHUBUNG secara penuh.`);
         }
+
 
         io.to(username).emit('whatsapp_event', { event: 'connection.update', data: update });
     });
