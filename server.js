@@ -160,17 +160,18 @@ io.on('connection', (socket) => {
 });
 
 // CORE ENGINE YANG DIOPTIMALKAN
-async function startWhatsAppEngine(username, pairingPhone = null) {
+
+    async function startWhatsAppEngine(username, pairingPhone = null) {
     const userSessionPath = path.join(SESSIONS_DIR, username);
     const { state, saveCreds } = await useMultiFileAuthState(userSessionPath);
 
-    // LANGKAH KRISITIAL: Jika ada socket lama yang berjalan, matikan total dulu agar tidak tabrakan
+    // Bersihkan instance lama jika ada
     if (activeSessions[username] && activeSessions[username].sock) {
         try {
             activeSessions[username].sock.ev.removeAllListeners();
             activeSessions[username].sock.end();
         } catch (e) {
-            console.log("Mencoba membersihkan socket lama:", e.message);
+            console.log("Cleaning old socket...", e.message);
         }
     }
 
@@ -179,31 +180,32 @@ async function startWhatsAppEngine(username, pairingPhone = null) {
     }
 
     io.to(username).emit('whatsapp_status', { status: 'connecting' });
-    io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { info: "Initializing Baileys Socket..." } });
+    io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { info: "Initializing Baileys Socket Engine..." } });
 
+    // FIX: Gunakan konfigurasi browser standar Chrome Linux agar tidak terkena HTTP 405
     const sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        browser: ["WA Debugger Professional", "Chrome", "1.0.0"] // Info browser wajib agar pairing valid
+        mobile: false, // Pastikan false jika memakai QR/Pairing web standar
+        browser: ['Ubuntu', 'Chrome', '20.0.04'] 
     });
 
     activeSessions[username].sock = sock;
 
-    // Logika Request Pairing Code (Wajib dieksekusi sebelum ada intervensi koneksi lain)
+    // Alur Request Pairing Code
     if (pairingPhone && !sock.authState.creds.registered) {
-        // Beri jeda 1.5 detik agar socket siap seutuhnya sebelum menembak request ke server WA
         setTimeout(async () => {
             try {
                 io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { info: `Requesting pairing code untuk ${pairingPhone}...` } });
                 let code = await sock.requestPairingCode(pairingPhone);
                 io.to(username).emit('whatsapp_pairing', { code });
-                io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { info: `Pairing code berhasil didapatkan: ${code}` } });
+                io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { info: `Pairing code didapatkan: ${code}` } });
             } catch (err) {
-                console.error("Gagal mendapatkan pairing code:", err);
-                io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { error: 'Gagal generate pairing code, coba klik sekali lagi.' } });
+                console.error("Gagal pairing:", err);
+                io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { error: 'Gagal generate pairing code. Silakan hapus session dan coba lagi.' } });
             }
-        }, 1500);
+        }, 2000); // Beri jeda 2 detik agar handshaking socket selesai
     }
 
     sock.ev.on('creds.update', saveCreds);
@@ -211,7 +213,7 @@ async function startWhatsAppEngine(username, pairingPhone = null) {
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         
-        if (qr && !pairingPhone) { // Hanya render QR jika user tidak sedang meminta pairing code
+        if (qr && !pairingPhone) {
             QRCode.toDataURL(qr, (err, url) => {
                 if (!err) {
                     activeSessions[username].lastQR = url;
@@ -222,16 +224,33 @@ async function startWhatsAppEngine(username, pairingPhone = null) {
 
         if (connection === 'close') {
             const statusCode = (lastDisconnect?.error)?.output?.statusCode;
-            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-            
             activeSessions[username].status = 'disconnected';
             activeSessions[username].lastQR = null;
             io.to(username).emit('whatsapp_status', { status: 'disconnected' });
             
-            // Auto reconnect jika bukan karena logout sengaja
-            if (shouldReconnect) {
-                console.log(`Koneksi terputus (Reason: ${statusCode}), mencoba menyambungkan ulang...`);
-                startWhatsAppEngine(username, null);
+            // FIX HARD: Jika terkena error 405 (Method Not Allowed) atau 401 (Bad Session)
+            // JANGAN lakukan reconnect otomatis karena akan membuat boot loop spam.
+            if (statusCode === 405 || statusCode === 401) {
+                console.log(`[!] Menghentikan Boot-Loop. Error Code: ${statusCode}. Menghapus session corrupt...`);
+                io.to(username).emit('whatsapp_event', { 
+                    event: 'connection.update', 
+                    data: { error: `Koneksi ditolak WhatsApp (Error ${statusCode}). Sesi dibersihkan secara otomatis demi keamanan. Silakan klik ulang Inisialisasi Mesin Sesi.` } 
+                });
+                
+                // Hapus folder session yang rusak secara otomatis
+                delete activeSessions[username];
+                if (fs.existsSync(userSessionPath)) {
+                    fs.rmSync(userSessionPath, { recursive: true, force: true });
+                }
+            } else {
+                // Untuk error normal lainnya, baru lakukan reconnect dengan jeda aman (5 detik)
+                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+                if (shouldReconnect) {
+                    console.log(`Koneksi terputus normal (${statusCode}), menyambungkan ulang dalam 5 detik...`);
+                    setTimeout(() => {
+                        startWhatsAppEngine(username, null);
+                    }, 5000);
+                }
             }
         } else if (connection === 'open') {
             activeSessions[username].status = 'connected';
@@ -242,7 +261,6 @@ async function startWhatsAppEngine(username, pairingPhone = null) {
         io.to(username).emit('whatsapp_event', { event: 'connection.update', data: update });
     });
 
-    // Pipa Log Event Kolektor
     const targetEvents = [
         'messages.upsert', 'messages.update', 'messages.delete',
         'group-participants.update', 'groups.update', 'contacts.update',
@@ -255,6 +273,7 @@ async function startWhatsAppEngine(username, pairingPhone = null) {
         });
     });
 }
+
 
 
 // Jalankan Engine Server Utama
