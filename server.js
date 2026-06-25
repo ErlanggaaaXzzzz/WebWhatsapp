@@ -191,20 +191,22 @@ async function startWhatsAppEngine(username, pairingPhone = null) {
     io.to(username).emit('whatsapp_status', { status: 'connecting' });
 
     // RACIKAN UTAMA: Konfigurasi Bypass Sinkronisasi 405
-    const sock = makeWASocket({
-        version, // Pasang versi hasil fetch tadi
+        const sock = makeWASocket({
+        version,
         auth: state,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
         mobile: false,
-        markOnlineOnConnect: true,
-        syncFullHistory: false, // JANGAN sinkronisasi history chat lama agar koneksi cepat stabil dan tidak memicu overload server Railway
-        defaultQueryTimeoutMs: 60000,
-        connectTimeoutMs: 60000,
-        keepAliveIntervalMs: 10000,
-        // Gunakan Manifest Browser Google Chrome Windows asli
+        markOnlineOnConnect: true,                
+        syncFullHistory: false,            // Jangan download semua chat lama
+        shouldSyncHistoryMessage: () => false, // Lewati proses parsing pesan masa lalu
+        maxSyncRetries: 1,                 // Batasi percobaan sinkronisasi jika timeout
+        connectTimeoutMs: 30000,           // Batas waktu tunggu koneksi soket (30 detik)
+        defaultQueryTimeoutMs: 30000,
+        
         browser: ['Windows', 'Chrome', '126.0.0.0']
     });
+
 
     activeSessions[username].sock = sock;
 
