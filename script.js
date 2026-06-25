@@ -45,13 +45,15 @@ function initSocket() {
         updateStatusUI(data.status);
     });
 
+    // Perbaikan penampilan QR Code
     socket.on('whatsapp_qr', (data) => {
         const qrImage = document.getElementById('qrImage');
         const qrStateText = document.getElementById('qrStateText');
-        if(data.qr) {
+        if (data.qr) {
             qrImage.src = data.qr;
-            qrImage.style.display = 'block';
-            qrStateText.innerText = 'Silakan scan QR code di atas menggunakan WhatsApp Anda.';
+            qrImage.style.display = 'block'; // Pastikan gambar tampil dari sembunyi
+            qrStateText.innerText = 'QR Code diperbarui! Silakan scan menggunakan menu Perangkat Tertaut di WhatsApp Anda.';
+            writeLog('info', 'QR Code baru diterima dari Baileys Engine.');
         }
     });
 
@@ -60,15 +62,14 @@ function initSocket() {
         if (data.code) {
             container.innerText = data.code;
             container.style.display = 'block';
+            writeLog('info', `Pairing Code sukses digenerate: ${data.code}. Periksa HP Anda untuk memasukkan kode.`);
         }
     });
 
-    // Pintu Masuk Event Utama Baileys Engine
     socket.on('whatsapp_event', (evt) => {
         metrics.eventCount++;
         document.getElementById('cardEvents').innerText = metrics.eventCount;
 
-        // Klasifikasi tipe event internal
         let category = 'event';
         if (evt.event.includes('messages.upsert')) {
             category = 'message';
@@ -88,28 +89,6 @@ function initSocket() {
     });
 }
 
-function updateStatusUI(status) {
-    const dot = document.getElementById('statusDot');
-    const text = document.getElementById('statusText');
-    const card = document.getElementById('cardStatus');
-
-    text.innerText = status.toUpperCase();
-    card.innerText = status.toUpperCase();
-    
-    if (status === 'connected') {
-        dot.className = 'status-dot connected';
-        card.style.color = '#00ff87';
-        document.getElementById('qrImage').style.display = 'none';
-        document.getElementById('pairingCodeContainer').style.display = 'none';
-    } else if (status === 'connecting') {
-        dot.className = 'status-dot';
-        card.style.color = '#f59e0b';
-    } else {
-        dot.className = 'status-dot';
-        card.style.color = '#ef4444';
-    }
-    renderSessionTable(status);
-}
 
 // Manajemen Perpindahan View Tab Dashboard
 function switchView(viewId) {
