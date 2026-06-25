@@ -62,6 +62,10 @@
         .log-error { color: var(--danger); }
         .log-message { color: #c084fc; }
         .log-event { color: #34d399; }
+        
+        /* JID Highlighter & Copy utility */
+        .jid-clickable { color: #f43f5e; font-weight: 600; cursor: pointer; text-decoration: underline; background: rgba(244, 63, 94, 0.1); padding: 1px 4px; border-radius: 4px; }
+        .jid-clickable:hover { background: rgba(244, 63, 94, 0.2); color: #fda4af; }
 
         /* Form Components & Utilities */
         .tools-bar { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; align-items: center; }
@@ -212,22 +216,27 @@
                 <button class="btn" onclick="downloadLogs()">💾 Download JSON Log</button>
             </div>
 
-            <div class="tools-bar" style="background: rgba(255,255,255,0.01); padding: 12px 20px; border-radius:10px; border: 1px solid var(--border);">
-                <span style="font-size:13px; color: var(--text-muted); font-weight:700;">Filter Kategori Event:</span>
+            <div class="tools-bar" style="background: rgba(255,255,255,0.01); padding: 12px 20px; border-radius:10px; border: 1px solid var(--border); justify-content: space-between;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <span style="font-size:13px; color: var(--text-muted); font-weight:700;">Filter Event:</span>
+                    <div class="filter-group">
+                        <label class="filter-item"><input type="checkbox" id="f-msg" checked onchange="filterLogs()"> Messages</label>
+                        <label class="filter-item"><input type="checkbox" id="f-grp" checked onchange="filterLogs()"> Groups</label>
+                        <label class="filter-item"><input type="checkbox" id="f-prs" checked onchange="filterLogs()"> Presence</label>
+                        <label class="filter-item"><input type="checkbox" id="f-cal" checked onchange="filterLogs()"> Calls</label>
+                        <label class="filter-item"><input type="checkbox" id="f-con" checked onchange="filterLogs()"> Connection</label>
+                        <label class="filter-item"><input type="checkbox" id="f-cnt" checked onchange="filterLogs()"> Contacts</label>
+                    </div>
+                </div>
                 <div class="filter-group">
-                    <label class="filter-item"><input type="checkbox" id="f-msg" checked onchange="filterLogs()"> Messages</label>
-                    <label class="filter-item"><input type="checkbox" id="f-grp" checked onchange="filterLogs()"> Groups</label>
-                    <label class="filter-item"><input type="checkbox" id="f-prs" checked onchange="filterLogs()"> Presence</label>
-                    <label class="filter-item"><input type="checkbox" id="f-cal" checked onchange="filterLogs()"> Calls</label>
-                    <label class="filter-item"><input type="checkbox" id="f-con" checked onchange="filterLogs()"> Connection</label>
-                    <label class="filter-item"><input type="checkbox" id="f-cnt" checked onchange="filterLogs()"> Contacts</label>
+                    <label class="filter-item"><input type="checkbox" id="audioToggle" checked> 🔊 Audio Notification</label>
                 </div>
             </div>
 
             <div class="console-container">
                 <div class="console-header">
                     <span style="font-family: monospace; font-size:13px; color:var(--primary); font-weight:600;">terminal@wa-debugger:~</span>
-                    <span style="font-size:12px; color: var(--text-muted); display:flex; align-items:center; gap:6px;">Auto-Scroll Active</span>
+                    <span style="font-size:12px; color: var(--text-muted); display:flex; align-items:center; gap:6px;">Click JID highlight inside log to auto-copy</span>
                 </div>
                 <div class="console-logs" id="consoleLogs"></div>
             </div>
@@ -268,7 +277,11 @@
 
         <div id="view-sessionMgr" class="view-pane">
             <h2 style="font-weight: 700;">Session Management</h2>
-            <p style="color: var(--text-muted);">Kelola siklus hidup, kluster runtime, isolasi file kredensial, dan penghapusan token sesi.</p>
+            <p style="color: var(--text-muted); margin-bottom:20px;">Kelola siklus hidup, kluster runtime, isolasi file kredensial, dan pembersihan state memori lokal.</p>
+            
+            <div class="tools-bar">
+                <button class="btn btn-secondary" onclick="clearAllAppCache()">⚠️ Clear App Local Storage Cache</button>
+            </div>
             
             <table class="session-table">
                 <thead>
