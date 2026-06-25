@@ -11,7 +11,8 @@ const pino = require('pino');
 const { 
     makeWASocket, 
     useMultiFileAuthState, 
-    DisconnectReason 
+    DisconnectReason,
+    fetchLatestBaileysVersion // Tambahkan ini jika belum ada
 } = require('@whiskeysockets/baileys');
 const QRCode = require('qrcode');
 
@@ -159,20 +160,28 @@ io.on('connection', (socket) => {
     });
 });
 
-// CORE ENGINE YANG DIOPTIMALKAN  
-    async function startWhatsAppEngine(username, pairingPhone = null) {
+// CORE ENGINE YANG DIOPTIMALKAN 
+    
+async function startWhatsAppEngine(username, pairingPhone = null) {
     const userSessionPath = path.join(SESSIONS_DIR, username);
     const { state, saveCreds } = await useMultiFileAuthState(userSessionPath);
 
-    // 1. Bersihkan socket lama secara total agar resource internal OS lepas
+    // Ambil versi WA Web terbaru secara dinamis agar terhindar dari 405 Method Not Allowed
+    let version = [2, 3000, 1017531287]; // Fallback versi web paling aman di tahun 2026
+    try {
+        const { version: latestVersion, isLatest } = await fetchLatestBaileysVersion();
+        if (latestVersion) version = latestVersion;
+        console.log(`Using WA Web Version: ${version.join('.')}, Is Latest: ${isLatest}`);
+    } catch(e) {
+        console.log("Gagal fetching versi WA terbaru, menggunakan fallback version.");
+    }
+
     if (activeSessions[username] && activeSessions[username].sock) {
         try {
             activeSessions[username].sock.ev.removeAllListeners();
             activeSessions[username].sock.end();
             delete activeSessions[username].sock;
-        } catch (e) {
-            console.log("Error membersihkan socket:", e.message);
-        }
+        } catch (e) {}
     }
 
     if (!activeSessions[username]) {
@@ -180,42 +189,42 @@ io.on('connection', (socket) => {
     }
 
     io.to(username).emit('whatsapp_status', { status: 'connecting' });
-    io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { info: "Memulai inisialisasi Baileys Core Engine..." } });
 
-    // 2. Gunakan User-Agent Chrome MacOS Terbaru yang paling stabil untuk Baileys Web
+    // RACIKAN UTAMA: Konfigurasi Bypass Sinkronisasi 405
     const sock = makeWASocket({
+        version, // Pasang versi hasil fetch tadi
         auth: state,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
         mobile: false,
-        keepAliveIntervalMs: 30000, // Menjaga kestabilan koneksi di cloud server
-        browser: ['Mac OS', 'Chrome', '125.0.0.0'] 
+        markOnlineOnConnect: true,
+        syncFullHistory: false, // JANGAN sinkronisasi history chat lama agar koneksi cepat stabil dan tidak memicu overload server Railway
+        defaultQueryTimeoutMs: 60000,
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 10000,
+        // Gunakan Manifest Browser Google Chrome Windows asli
+        browser: ['Windows', 'Chrome', '126.0.0.0']
     });
 
     activeSessions[username].sock = sock;
 
-    // 3. Alur Request Pairing Code dengan Penanganan Error Ketat
+    // Alur Request Pairing Code dengan Penanganan Cepat
     if (pairingPhone && !sock.authState.creds.registered) {
-        // Beri jeda 4 detik agar proses websocket handshake selesai sempurna di server Railway
+        // Kurangi delay menjadi 2.5 detik agar langsung dieksekusi sebelum token handshake kedaluwarsa
         setTimeout(async () => {
             try {
-                // Pastikan socket tidak tertutup di tengah jalan sebelum meminta kode
                 if (!activeSessions[username] || !activeSessions[username].sock) return;
 
-                io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { info: `Mengirim sinyal permintaan pairing code ke WhatsApp untuk nomor: ${pairingPhone}...` } });
+                io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { info: `Mengirim request pairing ke server pusat...` } });
                 
                 let code = await sock.requestPairingCode(pairingPhone);
                 
                 io.to(username).emit('whatsapp_pairing', { code });
-                io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { info: `Sukses! Pairing Code didapatkan: ${code}. Silakan cek HP Anda.` } });
+                io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { info: `Sukses! Pairing Code: ${code}. Cek HP Anda sekarang.` } });
             } catch (err) {
-                console.error("Gagal mendapatkan pairing code:", err);
-                io.to(username).emit('whatsapp_event', { 
-                    event: 'connection.update', 
-                    data: { error: `WhatsApp menolak pembuatan kode (IP Server Terblokir / Terlalu Banyak Request). Silakan ganti IP atau tunggu beberapa saat.` } 
-                });
+                console.error("Gagal pairing:", err);
             }
-        }, 4000);
+        }, 2500);
     }
 
     sock.ev.on('creds.update', saveCreds);
@@ -223,7 +232,6 @@ io.on('connection', (socket) => {
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         
-        // Hanya render QR jika user tidak memasukkan nomor telepon pairing
         if (qr && !pairingPhone) {
             QRCode.toDataURL(qr, (err, url) => {
                 if (!err) {
@@ -236,29 +244,23 @@ io.on('connection', (socket) => {
         if (connection === 'close') {
             const statusCode = (lastDisconnect?.error)?.output?.statusCode;
             activeSessions[username].status = 'disconnected';
-            activeSessions[username].lastQR = null;
-            io.to(username).emit('whatsapp_status', { status: 'disconnected' });
             
-            // PROTEKSI ANTI SPAM IP: Jika terkena status 405, 401, atau 429 (Too Many Requests)
-            if (statusCode === 405 || statusCode === 401 || statusCode === 429) {
-                console.log(`[!] Menghentikan perulangan mesin. WhatsApp merespons dengan kode: ${statusCode}`);
+            // Jika sukses pairing tapi mendadak close karena daur ulang socket, jangan hapus session jika statusCode normal
+            if (statusCode === 405 || statusCode === 401) {
+                io.to(username).emit('whatsapp_status', { status: 'disconnected' });
                 io.to(username).emit('whatsapp_event', { 
                     event: 'connection.update', 
-                    data: { error: `Koneksi dihentikan oleh WhatsApp dengan kode status ${statusCode}. Folder sesi otomatis dibersihkan demi keamanan IP.` } 
+                    data: { error: `Sesi ditutup otomatis (Code ${statusCode}). Bersihkan session lama lewat menu My Sessions untuk mencoba ulang.` } 
                 });
                 
-                // Hapus sesi lokal agar tidak terjadi penumpukan cache data korup
                 if (fs.existsSync(userSessionPath)) {
                     try { fs.rmSync(userSessionPath, { recursive: true, force: true }); } catch(e){}
                 }
                 if(activeSessions[username]) delete activeSessions[username].sock;
             } else {
-                // Hubungkan ulang otomatis hanya untuk kegagalan jaringan kasual (Jeda 5 detik)
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
                 if (shouldReconnect && activeSessions[username]) {
-                    console.log(`Koneksi terputus biasa (${statusCode}), mencoba rekoneksi...`);
                     setTimeout(() => {
-                        // Pastikan tidak meluncurkan ulang jika user sudah mengubah aksi ke pairing
                         if(activeSessions[username] && !activeSessions[username].sock) {
                             startWhatsAppEngine(username, null);
                         }
@@ -273,7 +275,7 @@ io.on('connection', (socket) => {
 
         io.to(username).emit('whatsapp_event', { event: 'connection.update', data: update });
     });
-
+    
     const targetEvents = [
         'messages.upsert', 'messages.update', 'messages.delete',
         'group-participants.update', 'groups.update', 'contacts.update',
