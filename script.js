@@ -193,17 +193,20 @@ async function requestPairingCode() {
 
 function renderSessionTable(status) {
     const tbody = document.getElementById('sessionTableBody');
+    if (!tbody) return; // Proteksi jika elemen belum dimuat di DOM
+    
     tbody.innerHTML = `
         <tr>
             <td><strong>${userData.username}</strong></td>
-            <td><span style="color:${status === 'connected' ? '#00ff87' : '#ef4444'}">${status.toUpperCase()}</span></td>
+            <td><span style="color:${status === 'connected' ? '#00ff87' : '#ef4444'}; font-weight:600;">${status.toUpperCase()}</span></td>
             <td>
-                <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="initiateSession()">Reconnect</button>
-                <button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" onclick="deleteSession()">Disconnect & Delete</button>
+                <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="initiateSession()">Reconnect</button>
+                <button class="btn btn-danger" style="padding:6px 12px; font-size:12px; color:white;" onclick="deleteSession()">Disconnect & Delete</button>
             </td>
         </tr>
     `;
 }
+
 
 function deleteSession() {
     if(confirm('Apakah Anda yakin ingin menghapus paksa sesi ini dari storage?')) {
