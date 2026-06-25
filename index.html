@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard WA Debugger Professional</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root {
+            --bg: #080c14;
+            --sidebar-bg: rgba(15, 23, 42, 0.6);
+            --card-bg: rgba(30, 41, 59, 0.4);
+            --border: rgba(255, 255, 255, 0.08);
+            --primary: #00ff87;
+            --primary-glow: rgba(0, 255, 135, 0.2);
+            --text: #f1f5f9;
+            --text-muted: #64748b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); display: flex; min-height: 100vh; overflow: hidden; }
+        
+        /* Sidebar */
+        .sidebar { width: 260px; background: var(--sidebar-bg); backdrop-filter: blur(20px); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px; justify-content: space-between; }
+        .brand { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: 1px; display: flex; align-items: center; gap: 10px; margin-bottom: 40px; }
+        .brand span { color: var(--primary); }
+        .menu-items { display: flex; flex-direction: column; gap: 8px; }
+        .menu-btn { padding: 12px 16px; border-radius: 8px; border: none; background: transparent; color: var(--text-muted); text-align: left; font-size: 15px; cursor: pointer; transition: all 0.3s; }
+        .menu-btn:hover, .menu-btn.active { background: rgba(255,255,255,0.05); color: var(--primary); }
+        
+        /* Main Layout */
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .topbar { height: 70px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 40px; background: rgba(11, 17, 32, 0.8); }
+        .user-profile { display: flex; align-items: center; gap: 15px; }
+        .session-badge { background: rgba(255,255,255,0.05); padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border); font-size: 13px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; display: inline-block; box-shadow: 0 0 8px #ef4444; }
+        .status-dot.connected { background: var(--primary); box-shadow: 0 0 8px var(--primary); }
+        
+        /* Content Area */
+        .view-pane { flex: 1; padding: 40px; overflow-y: auto; display: none; }
+        .view-pane.active { display: block; }
+        
+        /* Cards */
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; backdrop-filter: blur(10px); position: relative; }
+        .card h4 { color: var(--text-muted); font-size: 13px; text-transform: uppercase; margin-bottom: 8px; }
+        .card .value { font-size: 24px; font-weight: 600; color: #fff; }
+        
+        /* Console Terminal style */
+        .console-container { display: flex; flex-direction: column; background: #000; border: 1px solid var(--border); border-radius: 12px; height: 500px; overflow: hidden; }
+        .console-header { background: #111; padding: 12px 20px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
+        .console-logs { pading: 20px; flex: 1; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 14px; padding: 15px; line-height: 1.6; }
+        .log-row { margin-bottom: 4px; white-space: pre-wrap; word-break: break-all; }
+        .log-info { color: #38bdf8; }
+        .log-warning { color: #f59e0b; }
+        .log-error { color: #ef4444; }
+        .log-message { color: #a78bfa; }
+        .log-event { color: #10b981; }
+
+        /* Tools Bar */
+        .tools-bar { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+        .search-input, .input-field { background: #111a2e; border: 1px solid var(--border); border-radius: 6px; padding: 10px 16px; color: #fff; font-size: 14px; }
+        .search-input { flex: 1; }
+        .btn { background: var(--primary); color: #000; padding: 10px 20px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer; transition: 0.3s; }
+        .btn:hover { box-shadow: 0 0 10px var(--primary-glow); opacity: 0.9; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-secondary { background: rgba(255,255,255,0.08); color: white; }
+        .btn-secondary:hover { background: rgba(255,255,255,0.15); }
+        
+        /* Filters checkboxes */
+        .filter-group { display: flex; gap: 15px; background: rgba(0,0,0,0.2); padding: 10px 15px; border-radius: 8px; border: 1px solid var(--border); }
+        .filter-item { display: flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
+        
+        /* QR / Pairing container */
+        .connection-box { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; }
+        .qr-pane { display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 12px; padding: 30px; min-height: 300px; }
+        #qrImage { background: white; padding: 10px; border-radius: 8px; margin-top: 15px; display: none; max-width: 220px;}
+        .pairing-code-display { font-size: 32px; font-family: monospace; letter-spacing: 4px; color: var(--primary); margin-top: 20px; font-weight: bold; background: rgba(0,0,0,0.4); padding: 10px 20px; border-radius: 8px; display: none; }
+        
+        /* Session List Table */
+        .session-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .session-table th, .session-table td { text-align: left; padding: 14px; border-bottom: 1px solid var(--border); }
+        .session-table th { color: var(--text-muted); font-size: 14px; font-weight: 500; }
+
+        @media(max-width: 768px) {
+            body { flex-direction: column; }
+            .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+            .connection-box { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div>
+            <div class="brand"><span>WA</span> DEBUGGER</div>
+            <nav class="menu-items">
+                <button class="menu-btn active" onclick="switchView('dashboard')">Dashboard</button>
+                <button class="menu-btn" onclick="switchView('connect')">Connect WhatsApp</button>
+                <button class="menu-btn" onclick="switchView('liveDebug')">Live Debug</button>
+                <button class="menu-btn" onclick="switchView('sessionMgr')">My Sessions</button>
+            </nav>
+        </div>
+        <button class="menu-btn btn-danger" onclick="logout()" style="color: white;">Logout</button>
+    </div>
+
+    <div class="main-content">
+        <div class="topbar">
+            <div class="user-profile">
+                <span id="topUsername" style="font-weight: 600;">Loading...</span>
+                <span class="session-badge">Active Session: <span id="topSessionId" style="color:var(--primary); font-weight:600;">-</span></span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span id="statusDot" class="status-dot"></span>
+                <span id="statusText" style="font-size: 14px; font-weight: 500; color: var(--text-muted);">Disconnected</span>
+            </div>
+        </div>
+
+        <div id="view-dashboard" class="view-pane active">
+            <h2 style="margin-bottom: 24px;">Overview Engine</h2>
+            <div class="metrics-grid">
+                <div class="card">
+                    <h4>Status</h4>
+                    <div class="value" id="cardStatus" style="color: #ef4444;">Disconnected</div>
+                </div>
+                <div class="card">
+                    <h4>Total Messages</h4>
+                    <div class="value" id="cardMessages">0</div>
+                </div>
+                <div class="card">
+                    <h4>Total Groups</h4>
+                    <div class="value" id="cardGroups">0</div>
+                </div>
+                <div class="card">
+                    <h4>Total Events</h4>
+                    <div class="value" id="cardEvents">0</div>
+                </div>
+                <div class="card">
+                    <h4>Engine Runtime</h4>
+                    <div class="value" id="cardRuntime" style="font-size:16px;">00:00:00</div>
+                </div>
+            </div>
+            <div class="card">
+                <h3 style="margin-bottom:15px;">Quick System Log</h3>
+                <p style="color: var(--text-muted); font-size:14px; line-height:1.6;">Gunakan tab <strong>Live Debug</strong> untuk melihat struktur data event mentah (Raw Event JSON Payload) secara terperinci untuk analisis siklus data Baileys API.</p>
+            </div>
+        </div>
+
+        <div id="view-connect" class="view-pane">
+            <h2>Konektivitas Device</h2>
+            <p style="color: var(--text-muted); margin-bottom: 20px;">Pilih opsi otentikasi di bawah untuk mengaitkan akun WhatsApp Anda.</p>
+            
+            <div class="tools-bar">
+                <button class="btn" onclick="initiateSession()">Inisialisasi Mesin Sesi</button>
+            </div>
+
+            <div class="connection-box">
+                <div class="qr-pane">
+                    <h3>Metode A: QR Code</h3>
+                    <p style="color: var(--text-muted); font-size:13px; margin-top:5px; text-align:center;">Dapatkan QR Code terbaru secara dinamis.</p>
+                    <button class="btn btn-secondary" style="margin-top:15px;" onclick="requestQR()">Generate QR Code</button>
+                    <img id="qrImage" alt="WA QR Code">
+                    <p id="qrStateText" style="margin-top:10px; font-size:13px; color:var(--text-muted);"></p>
+                </div>
+                <div class="qr-pane">
+                    <h3>Metode B: Pairing Code</h3>
+                    <p style="color: var(--text-muted); font-size:13px; margin-top:5px; text-align:center;">Masukkan nomor telepon berformat internasional (contoh: 6281xxxxxxxxx)</p>
+                    <input type="text" id="pairingPhone" class="input-field" placeholder="628xxxxxxxxxx" style="margin-top:15px; width:80%; text-align:center;">
+                    <button class="btn btn-secondary" style="margin-top:15px;" onclick="requestPairingCode()">Generate Pairing Code</button>
+                    <div class="pairing-code-display" id="pairingCodeContainer">- - - - - - - -</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-liveDebug" class="view-pane">
+            <h2>Realtime Engine Debugger</h2>
+            <p style="color: var(--text-muted); margin-bottom: 20px;">Aliran data mentah dari socket event listener Baileys pipeline.</p>
+            
+            <div class="tools-bar">
+                <input type="text" id="logSearch" class="search-input" placeholder="Cari Log berdasarkan Kata kunci, Event, Phone, ID..." oninput="filterLogs()">
+                <button class="btn btn-secondary" onclick="clearConsole()">Clear Console</button>
+                <button class="btn" onclick="downloadLogs()">Download JSON Log</button>
+            </div>
+
+            <div class="tools-bar" style="background: rgba(255,255,255,0.02); padding: 10px; border-radius:8px; border: 1px solid var(--border);">
+                <span style="font-size:13px; color: var(--text-muted); font-weight:600;">Filter Event:</span>
+                <div class="filter-group">
+                    <label class="filter-item"><input type="checkbox" id="f-msg" checked onchange="filterLogs()"> Messages</label>
+                    <label class="filter-item"><input type="checkbox" id="f-grp" checked onchange="filterLogs()"> Groups</label>
+                    <label class="filter-item"><input type="checkbox" id="f-prs" checked onchange="filterLogs()"> Presence</label>
+                    <label class="filter-item"><input type="checkbox" id="f-cal" checked onchange="filterLogs()"> Calls</label>
+                    <label class="filter-item"><input type="checkbox" id="f-con" checked onchange="filterLogs()"> Connection</label>
+                    <label class="filter-item"><input type="checkbox" id="f-cnt" checked onchange="filterLogs()"> Contacts</label>
+                </div>
+            </div>
+
+            <div class="console-container">
+                <div class="console-header">
+                    <span style="font-family: monospace; font-size:13px; color:var(--primary)">terminal@wa-debugger:~</span>
+                    <span style="font-size:12px; color: var(--text-muted);">Auto-Scroll Active</span>
+                </div>
+                <div class="console-logs" id="consoleLogs">
+                    <div class="log-row log-info">[INFO] Console siap menerima sinyal...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-sessionMgr" class="view-pane">
+            <h2>Session Management</h2>
+            <p style="color: var(--text-muted);">Kelola siklus hidup kluster runtime isolasi sesi WhatsApp Anda.</p>
+            
+            <table class="session-table">
+                <thead>
+                    <tr>
+                        <th>Session ID / Alias</th>
+                        <th>Device Status</th>
+                        <th>Aksi Kontrol Sesi</th>
+                    </tr>
+                </thead>
+                <tbody id="sessionTableBody">
+                    <tr>
+                        <td colspan="3" style="text-align: center; color: var(--text-muted);">Memuat repositori session...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="/script.js"></script>
+</body>
+</html>
