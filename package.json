@@ -4,7 +4,7 @@
   "description": "WhatsApp Debugger Professional Dashboard",
   "main": "server.js",
   "engines": {
-    "node": "24.17.0"
+    "node": "24.15.0"
   },
   "scripts": {
     "start": "node server.js"
