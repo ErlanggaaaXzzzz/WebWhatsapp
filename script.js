@@ -20,11 +20,12 @@ const userData = JSON.parse(window.atob(base64));
 
 // Jalankan saat DOM siap
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('topUsername').innerText = userData.username;
-    document.getElementById('topSessionId').innerText = userData.username;
+    // Inject teks profile user ke elemen HTML
+    if (document.getElementById('topUsername')) document.getElementById('topUsername').innerText = userData.username;
+    if (document.getElementById('topSessionId')) document.getElementById('topSessionId').innerText = userData.username;
     
     initSocket();
-    loadSavedState(); // FIX REFRESH: Pulihkan tab, metrik, dan log dari localStorage
+    loadSavedState(); // FIX REFRESH: Pulihkan tab, metrik, dan log mentah murni dari localStorage
 });
 
 // Mengatur Runtime Clock (Bawaan Asli)
@@ -45,7 +46,6 @@ function initSocket() {
         writeLog('info', 'Berhasil membangun jalur pipa realtime (Socket.IO)');
     });
 
-    // Menangani sinkronisasi status realtime global dari backend server cloud
     socket.on('whatsapp_status', (data) => {
         console.log("Sinkronisasi status soket masuk:", data.status);
         updateStatusUI(data.status);
@@ -77,7 +77,6 @@ function initSocket() {
     });
 
     // Event Listener Utama Aliran Data Event Baileys Pipeline
-        // Event Listener Utama Aliran Data Event Baileys Pipeline
     socket.on('whatsapp_event', (evt) => {
         // Hitung metrik pesan masuk secara realtime
         if (evt.event === 'messages.upsert') {
@@ -88,7 +87,7 @@ function initSocket() {
         }
 
         // Hitung metrik grup masuk secara realtime
-        if (evt.event === 'groups.update' || evt.event === 'group-participants.update') {
+        if (evt.event === 'groups.update' || evt.event === 'group-participants.update' || evt.event === 'groups.upsert') {
             metrics.groupCount++;
             const cardGrp = document.getElementById('cardGroups');
             if (cardGrp) cardGrp.innerText = metrics.groupCount;
@@ -105,7 +104,7 @@ function initSocket() {
         if (evt.event.includes('connection')) category = 'info';
         if (evt.event.includes('messages.upsert')) category = 'message';
 
-        // Parsing data asli ke bentuk Object/JSON asli (bukan cuma string)
+        // Ambil objek aslinya (RAW Data Mentahan Baileys murni)
         let rawObj = null;
         try {
             rawObj = typeof evt.data === 'string' ? JSON.parse(evt.data) : evt.data;
@@ -116,10 +115,9 @@ function initSocket() {
         // Format tampilan untuk layar console biar rapi berindentasi ke bawah
         let formattedJSON = JSON.stringify(rawObj, null, 2);
 
-        // Kirim rawObj ke writeLog agar data mentahnya ikut tersimpan komplit
+        // Kirim rawObj ke writeLog agar data mentahnya ikut tersimpan di objek .raw
         writeLog(category, `[${evt.event}]\n${formattedJSON}`, evt.event, rawObj);
     });
-
 }
 
 // Fungsi Manajemen Pergantian Tab (View Switcher) Terintegrasi LocalStorage
@@ -167,7 +165,7 @@ function loadSavedState() {
     const savedStatus = localStorage.getItem('wa_current_status') || 'disconnected';
     updateStatusUI(savedStatus);
 
-    // 4. Bangun Kembali Log Terminal dari Memory Lokal
+    // 4. Bangun Kembali Log Terminal dari Memory Lokal (Membawa Objek Mentahan .raw)
     const savedLogs = localStorage.getItem('terminal_logs_backup');
     if (savedLogs) {
         try {
@@ -179,16 +177,16 @@ function loadSavedState() {
                     const row = document.createElement('div');
                     row.className = `log-row log-${log.type}`;
                     row.dataset.event = log.event;
-                    row.innerText = log.text; // Menampilkan teks ber-timestamp di screen
+                    row.innerText = log.text; 
                     consoleLogs.appendChild(row);
                 });
-                consoleLogs.scrollTop = consoleLogs.scrollHeight;
+                consoleLogs.scrollTop = consoleLogs.scrollHeight; // Auto-scroll ke bawah
             }
         } catch (e) { console.error("Gagal membaca arsip log.", e); }
     }
 }
 
-// Fungsi Penulis Log Terminal Utama dengan Sistem Cadangan Otomatis
+// Fungsi Penulis Log Terminal Utama dengan Sistem Cadangan Otomatis + RAW Data Mentah
 function writeLog(type, text, eventName = '', rawData = null) {
     const consoleLogs = document.getElementById('consoleLogs');
     if (!consoleLogs) return;
@@ -203,17 +201,16 @@ function writeLog(type, text, eventName = '', rawData = null) {
     row.innerText = textWithTime;
 
     consoleLogs.appendChild(row);
-    consoleLogs.scrollTop = consoleLogs.scrollHeight; // Gulir otomatis terminal ke bawah
+    consoleLogs.scrollTop = consoleLogs.scrollHeight; 
 
-    // Amankan data ke array internal beserta payload mentah (raw) dari server
+    // Simpan teks log sekaligus payload mentah asli (raw) WhatsApp dari Baileys
     allLogs.push({ 
         type, 
         text: textWithTime, 
         event: eventName,
-        raw: rawData // Menyimpan data mentah beneran (seperti di screenshot)
+        raw: rawData 
     });
     
-    // Batasi cache maksimal 150 baris di browser agar performa tab tetap enteng
     if (allLogs.length > 150) allLogs.shift();
     localStorage.setItem('terminal_logs_backup', JSON.stringify(allLogs));
 }
@@ -238,6 +235,54 @@ function updateStatusUI(status) {
         if(statusText) { statusText.innerText = "DISCONNECTED"; statusText.style.color = "#ef4444"; }
         if(cardStatus) { cardStatus.innerText = "DISCONNECTED"; cardStatus.style.color = "#ef4444"; }
         if(statusDot) { statusDot.className = "status-dot disconnected"; }
+    }
+}
+
+// Sandbox Form Sender Engine
+async function sendSandboxMessage() {
+    const target = document.getElementById('sandboxTarget').value.trim();
+    const type = document.getElementById('sandboxType').value;
+    const content = document.getElementById('sandboxContent').value.trim();
+    const responseBox = document.getElementById('sandboxResponse');
+
+    if (!target || !content) {
+        alert("Nomor JID tujuan dan konten pesan wajib diisi!");
+        return;
+    }
+
+    responseBox.innerText = "Sedang memproses pengiriman payload...";
+    responseBox.style.color = "#f59e0b";
+
+    let payloadBody;
+    if (type === 'json') {
+        try {
+            payloadBody = JSON.parse(content);
+        } catch (e) {
+            responseBox.innerText = `[Error Skema JSON]:\n${e.message}`;
+            responseBox.style.color = "#ef4444";
+            return;
+        }
+    } else {
+        payloadBody = { text: content };
+    }
+
+    // Melakukan request post backend send message
+    try {
+        const res = await fetch('/api/whatsapp/send', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ jid: target, message: payloadBody })
+        });
+        const result = await res.json();
+        
+        responseBox.innerText = JSON.stringify(result, null, 2);
+        responseBox.style.color = res.ok ? "#00ff87" : "#ef4444";
+    } catch (err) {
+        responseBox.innerText = `[Transmission Error]:\n${err.message}`;
+        responseBox.style.color = "#ef4444";
     }
 }
 
@@ -323,7 +368,7 @@ function filterLogs() {
         
         let matchFilter = true;
         if (evType.includes('messages.upsert') && !showMsg) matchFilter = false;
-        else if (evType.includes('groups') && !showGrp) matchFilter = false;
+        else if ((evType.includes('groups') || evType.includes('group')) && !showGrp) matchFilter = false;
         else if (evType.includes('presence') && !showPrs) matchFilter = false;
         else if (evType.includes('call') && !showCal) matchFilter = false;
         else if (evType.includes('connection') && !showCon) matchFilter = false;
@@ -334,11 +379,10 @@ function filterLogs() {
     });
 }
 
-// Download Berkas Log Eksternal
+// Download Berkas Log Eksternal - Komplit Murni dengan RAW Base Objects data
 function downloadLogs() {
-    if (allLogs.length === 0) return alert("Belum ada logs data yang terkumpul.");
+    if(allLogs.length === 0) return alert("Belum ada logs data yang terkumpul.");
     
-    // Jalankan filter dinamis sesuai dengan kondisi checkbox di UI saat ini
     const query = document.getElementById('logSearch').value.toLowerCase();
     const showMsg = document.getElementById('f-msg').checked;
     const showGrp = document.getElementById('f-grp').checked;
@@ -353,7 +397,7 @@ function downloadLogs() {
         
         let matchFilter = true;
         if (evType.includes('messages.upsert') && !showMsg) matchFilter = false;
-        else if (evType.includes('groups') && !showGrp) matchFilter = false;
+        else if ((evType.includes('groups') || evType.includes('group')) && !showGrp) matchFilter = false;
         else if (evType.includes('presence') && !showPrs) matchFilter = false;
         else if (evType.includes('call') && !showCal) matchFilter = false;
         else if (evType.includes('connection') && !showCon) matchFilter = false;
@@ -365,8 +409,7 @@ function downloadLogs() {
 
     if (filteredExport.length === 0) return alert("Tidak ada data log yang cocok dengan filter saat ini.");
 
-    // Ekspor data terformat rapi (indentasi 2) berisi log sistem + struktur data mentah asli WA
-    const dataStr = "data:text/json;charset=utf-8 chunks," + encodeURIComponent(JSON.stringify(filteredExport, null, 2));
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(filteredExport, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
     downloadAnchor.setAttribute("download", `debug-raw-log-${userData.username}.json`);
@@ -374,7 +417,6 @@ function downloadLogs() {
     downloadAnchor.click();
     downloadAnchor.remove();
 }
-
 
 // Buka Tutup Sidebar Mobile Mode
 function toggleSidebar() {
