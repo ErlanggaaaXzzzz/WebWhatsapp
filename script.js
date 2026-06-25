@@ -37,56 +37,83 @@ function initSocket() {
         writeLog('info', 'Berhasil membangun jalur pipa realtime (Socket.IO)');
     });
 
-    socket.on('connect_error', (err) => {
-        writeLog('error', `Kegagalan Otorisasi Socket: ${err.message}`);
-    });
-
+    // Sinkronisasi status terpusat
     socket.on('whatsapp_status', (data) => {
-        updateStatusUI(data.status);
+        console.log("Menerima pembaruan status dari server:", data.status);
+        updateStatusUI(data.status); 
+        
+        // Panggil fungsi render tabel jika elemen tabelnya eksis di halaman saat ini
+        if (document.getElementById('sessionTableBody')) {
+            renderSessionTable(data.status);
+        }
     });
 
-    // Perbaikan penampilan QR Code
     socket.on('whatsapp_qr', (data) => {
         const qrImage = document.getElementById('qrImage');
         const qrStateText = document.getElementById('qrStateText');
-        if (data.qr) {
+        if (data.qr && qrImage) {
             qrImage.src = data.qr;
-            qrImage.style.display = 'block'; // Pastikan gambar tampil dari sembunyi
-            qrStateText.innerText = 'QR Code diperbarui! Silakan scan menggunakan menu Perangkat Tertaut di WhatsApp Anda.';
-            writeLog('info', 'QR Code baru diterima dari Baileys Engine.');
+            qrImage.style.display = 'block';
+            if (qrStateText) qrStateText.innerText = 'Silakan scan menggunakan WhatsApp Anda.';
         }
     });
 
     socket.on('whatsapp_pairing', (data) => {
         const container = document.getElementById('pairingCodeContainer');
-        if (data.code) {
+        if (data.code && container) {
             container.innerText = data.code;
             container.style.display = 'block';
-            writeLog('info', `Pairing Code sukses digenerate: ${data.code}. Periksa HP Anda untuk memasukkan kode.`);
         }
     });
 
+    // Penangkap Aliran Event untuk Dashboard Metrics & Live Debugger Console
     socket.on('whatsapp_event', (evt) => {
-        metrics.eventCount++;
-        document.getElementById('cardEvents').innerText = metrics.eventCount;
+        // Update Hitungan Metrik Instan
+        if (document.getElementById('cardEvents')) {
+            metrics.eventCount++;
+            document.getElementById('cardEvents').innerText = metrics.eventCount;
+        }
 
         let category = 'event';
         if (evt.event.includes('messages.upsert')) {
             category = 'message';
-            metrics.msgCount++;
-            document.getElementById('cardMessages').innerText = metrics.msgCount;
-        } else if (evt.event.includes('groups') || evt.event.includes('group-participants')) {
-            category = 'event';
-            metrics.groupCount++;
-            document.getElementById('cardGroups').innerText = metrics.groupCount;
+            if (document.getElementById('cardMessages')) {
+                metrics.msgCount++;
+                document.getElementById('cardMessages').innerText = metrics.msgCount;
+            }
         } else if (evt.event.includes('connection')) {
             category = 'info';
-        } else if (evt.event.includes('presence')) {
-            category = 'presence';
         }
 
-        writeLog(category, `[${evt.event}] ${JSON.stringify(evt.data)}`, evt.event);
+        // FORMAT LOG JSON LEBIH RAPI (Menggunakan replacer null, 2 spasi agar berstruktur rapi)
+        let cleanLogMessage = "";
+        try {
+            cleanLogMessage = typeof evt.data === 'object' 
+                ? JSON.stringify(evt.data, null, 2) 
+                : evt.data;
+        } catch (e) {
+            cleanLogMessage = evt.data;
+        }
+
+        writeLog(category, `[${evt.event}] ${cleanLogMessage}`, evt.event);
     });
+}
+
+// Fungsi Update Komponen UI Secara Global
+function updateStatusUI(status) {
+    const badgeStatus = document.getElementById('currentStatusBadge'); // Sesuaikan dengan id badge status kamu
+    const textStatus = document.querySelectorAll('.session-status-text'); // Jika ada teks status lain
+
+    if (badgeStatus) {
+        badgeStatus.innerText = status.toUpperCase();
+        if (status === 'connected') {
+            badgeStatus.className = "badge bg-success"; // Hijau jika terkoneksi
+        } else if (status === 'connecting') {
+            badgeStatus.className = "badge bg-warning text-dark"; // Kuning jika loading
+        } else {
+            badgeStatus.className = "badge bg-danger"; // Merah jika disconneted
+        }
+    }
 }
 
 
