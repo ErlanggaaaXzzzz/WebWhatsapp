@@ -1,34 +1,56 @@
 let socket;
 let allLogs = [];
-let filteredLogs = [];
 let currentView = 'dashboard';
 
 // Sinkronisasi data metrik lokal
 let metrics = { msgCount: 0, groupCount: 0, eventCount: 0 };
 let startTime = Date.now();
 
-// Validasi Token Akses Utama (Bawaan Asli)
+// Audio Synthesizer (Audio Bip bawaan browser tanpa file external)
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playNotificationSound() {
+    const isAudioOn = document.getElementById('audioToggle') ? document.getElementById('audioToggle').checked : true;
+    if (!isAudioOn) return;
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // Nada D5
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.15);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.15);
+    } catch (e) { console.log('AudioContext blocked by browser policy'); }
+}
+
+// Validasi Token Akses Utama
 const token = localStorage.getItem('token') || sessionStorage.getItem('token');
 if (!token) {
     window.location.href = '/login.html';
 }
 
-// Parsing Data User dari JWT (Bawaan Asli)
+// Parsing Data User dari JWT
 const base64Url = token.split('.')[1];
 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
 const userData = JSON.parse(window.atob(base64));
 
 // Jalankan saat DOM siap
 document.addEventListener('DOMContentLoaded', () => {
-    // Inject teks profile user ke elemen HTML
     if (document.getElementById('topUsername')) document.getElementById('topUsername').innerText = userData.username;
     if (document.getElementById('topSessionId')) document.getElementById('topSessionId').innerText = userData.username;
     
+    // Minta izin Web Desktop Notification API browser
+    if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+        Notification.requestPermission();
+    }
+
     initSocket();
-    loadSavedState(); // FIX REFRESH: Pulihkan tab, metrik, dan log mentah murni dari localStorage
+    loadSavedState(); 
 });
 
-// Mengatur Runtime Clock (Bawaan Asli)
+// Mengatur Runtime Clock
 setInterval(() => {
     const elapsed = Date.now() - startTime;
     const hrs = String(Math.floor(elapsed / 3600000)).padStart(2, '0');
@@ -49,8 +71,6 @@ function initSocket() {
     socket.on('whatsapp_status', (data) => {
         console.log("Sinkronisasi status soket masuk:", data.status);
         updateStatusUI(data.status);
-        
-        // Amankan status ke localStorage agar saat di-refresh tidak berkedip merah
         localStorage.setItem('wa_current_status', data.status);
 
         if (document.getElementById('sessionTableBody')) {
@@ -78,23 +98,33 @@ function initSocket() {
 
     // Event Listener Utama Aliran Data Event Baileys Pipeline
     socket.on('whatsapp_event', (evt) => {
-        // Hitung metrik pesan masuk secara realtime
-        if (evt.event === 'messages.upsert') {
+        let isMessage = evt.event === 'messages.upsert';
+        let isGroup = evt.event === 'groups.update' || evt.event === 'group-participants.update' || evt.event === 'groups.upsert';
+
+        if (isMessage) {
             metrics.msgCount++;
             const cardMsg = document.getElementById('cardMessages');
             if (cardMsg) cardMsg.innerText = metrics.msgCount;
             localStorage.setItem('metric_msg_count', metrics.msgCount);
+            
+            playNotificationSound(); // Mainkan feedback suara audio
+
+            // Kirim Web Push Notification jika tab sedang di-minimize
+            if (Notification.permission === "granted" && document.hidden) {
+                new Notification("WA Debugger Event", {
+                    body: `Ada pesan WhatsApp masuk terdeteksi di pipeline!`,
+                    icon: '/favicon.ico'
+                });
+            }
         }
 
-        // Hitung metrik grup masuk secara realtime
-        if (evt.event === 'groups.update' || evt.event === 'group-participants.update' || evt.event === 'groups.upsert') {
+        if (isGroup) {
             metrics.groupCount++;
             const cardGrp = document.getElementById('cardGroups');
             if (cardGrp) cardGrp.innerText = metrics.groupCount;
             localStorage.setItem('metric_group_count', metrics.groupCount);
         }
 
-        // Hitung total event
         metrics.eventCount++;
         const cardEvt = document.getElementById('cardEvents');
         if (cardEvt) cardEvt.innerText = metrics.eventCount;
@@ -102,44 +132,32 @@ function initSocket() {
 
         let category = 'event';
         if (evt.event.includes('connection')) category = 'info';
-        if (evt.event.includes('messages.upsert')) category = 'message';
+        if (isMessage) category = 'message';
 
-        // Ambil objek aslinya (RAW Data Mentahan Baileys murni)
         let rawObj = null;
         try {
             rawObj = typeof evt.data === 'string' ? JSON.parse(evt.data) : evt.data;
-        } catch (e) {
-            rawObj = evt.data;
-        }
+        } catch (e) { rawObj = evt.data; }
 
-        // Format tampilan untuk layar console biar rapi berindentasi ke bawah
         let formattedJSON = JSON.stringify(rawObj, null, 2);
-
-        // Kirim rawObj ke writeLog agar data mentahnya ikut tersimpan di objek .raw
         writeLog(category, `[${evt.event}]\n${formattedJSON}`, evt.event, rawObj);
     });
 }
 
-// Fungsi Manajemen Pergantian Tab (View Switcher) Terintegrasi LocalStorage
+// Fungsi Manajemen Pergantian Tab (View Switcher)
 function switchView(viewName) {
     currentView = viewName;
-    
-    // Sembunyikan seluruh view pane yang ada
     document.querySelectorAll('.view-pane').forEach(pane => pane.classList.remove('active'));
     document.querySelectorAll('.menu-btn').forEach(btn => btn.classList.remove('active'));
 
-    // Aktifkan view target pilihan user
     const targetPane = document.getElementById(`view-${viewName}`);
     if (targetPane) targetPane.classList.add('active');
 
-    // Aktifkan visual tombol menu penunjuk
     const targetBtn = document.getElementById(`btn-${viewName}`) || document.getElementById(`id-${viewName}`);
     if (targetBtn) targetBtn.classList.add('active');
 
-    // Simpan preferensi menu user ke dalam localStorage agar awet saat refresh
     localStorage.setItem('active_view_pane', viewName);
 
-    // Otomatis tutup sidebar di mode mobile setelah tombol diklik
     const sidebar = document.getElementById('appSidebar');
     if (sidebar && window.innerWidth <= 768) {
         sidebar.classList.remove('open');
@@ -148,11 +166,9 @@ function switchView(viewName) {
 
 // Pemuat State Cadangan (Anti-Reset saat Halaman Di-refresh)
 function loadSavedState() {
-    // 1. Pulihkan Tab Terakhir
     const savedView = localStorage.getItem('active_view_pane') || 'dashboard';
     switchView(savedView);
 
-    // 2. Pulihkan Angka Pencatatan Metrik
     metrics.msgCount = parseInt(localStorage.getItem('metric_msg_count')) || 0;
     metrics.groupCount = parseInt(localStorage.getItem('metric_group_count')) || 0;
     metrics.eventCount = parseInt(localStorage.getItem('metric_event_count')) || 0;
@@ -161,11 +177,9 @@ function loadSavedState() {
     if (document.getElementById('cardGroups')) document.getElementById('cardGroups').innerText = metrics.groupCount;
     if (document.getElementById('cardEvents')) document.getElementById('cardEvents').innerText = metrics.eventCount;
 
-    // 3. Pasang Status Terakhir di UI Sembari Menunggu Koneksi Handshake Socket Selesai
     const savedStatus = localStorage.getItem('wa_current_status') || 'disconnected';
     updateStatusUI(savedStatus);
 
-    // 4. Bangun Kembali Log Terminal dari Memory Lokal (Membawa Objek Mentahan .raw)
     const savedLogs = localStorage.getItem('terminal_logs_backup');
     if (savedLogs) {
         try {
@@ -174,36 +188,55 @@ function loadSavedState() {
             if (consoleLogs) {
                 consoleLogs.innerHTML = ""; 
                 allLogs.forEach(log => {
-                    const row = document.createElement('div');
-                    row.className = `log-row log-${log.type}`;
-                    row.dataset.event = log.event;
-                    row.innerText = log.text; 
-                    consoleLogs.appendChild(row);
+                    appendLogRowToDOM(log.type, log.text, log.event);
                 });
-                consoleLogs.scrollTop = consoleLogs.scrollHeight; // Auto-scroll ke bawah
+                consoleLogs.scrollTop = consoleLogs.scrollHeight;
             }
         } catch (e) { console.error("Gagal membaca arsip log.", e); }
     }
 }
 
-// Fungsi Penulis Log Terminal Utama dengan Sistem Cadangan Otomatis + RAW Data Mentah
-function writeLog(type, text, eventName = '', rawData = null) {
+// Sistem Highlighting JID Otomatis & Helper Append Baris DOM
+function appendLogRowToDOM(type, text, eventName) {
     const consoleLogs = document.getElementById('consoleLogs');
     if (!consoleLogs) return;
 
-    const timestamp = new Date().toISOString().split('T')[1].slice(0, 8);
-    const textWithTime = `[${timestamp}] ${text}`;
-
-    // Buat elemen baris log baru di DOM
     const row = document.createElement('div');
     row.className = `log-row log-${type}`;
     row.dataset.event = eventName;
-    row.innerText = textWithTime;
+
+    // Regex mencocokkan pola format WhatsApp JID (@s.whatsapp.net atau @g.us atau @lid)
+    const jidRegex = /([a-zA-0-9._-]+@(s\.whatsapp\.net|g\.us|lid))/g;
+    
+    if (jidRegex.test(text)) {
+        row.innerHTML = text.replace(jidRegex, `<span class="jid-clickable" onclick="copyJIDToClipboard('$1')">$1</span>`);
+    } else {
+        row.innerText = text;
+    }
 
     consoleLogs.appendChild(row);
-    consoleLogs.scrollTop = consoleLogs.scrollHeight; 
+}
 
-    // Simpan teks log sekaligus payload mentah asli (raw) WhatsApp dari Baileys
+// Salin JID Otomatis saat Tag Diklik
+function copyJIDToClipboard(jid) {
+    navigator.clipboard.writeText(jid).then(() => {
+        // Pindahkan String JID langsung ke kolom input target di API Sandbox Tester
+        const targetInput = document.getElementById('sandboxTarget');
+        if (targetInput) targetInput.value = jid;
+        alert(`Berhasil menyalin JID: ${jid}\nOtomatis diisikan ke Form JID API Tester!`);
+    });
+}
+
+// Fungsi Penulis Log Terminal Utama dengan Sistem Cadangan Otomatis + RAW Data Mentah
+function writeLog(type, text, eventName = '', rawData = null) {
+    const timestamp = new Date().toISOString().split('T')[1].slice(0, 8);
+    const textWithTime = `[${timestamp}] ${text}`;
+
+    appendLogRowToDOM(type, textWithTime, eventName);
+    
+    const consoleLogs = document.getElementById('consoleLogs');
+    if (consoleLogs) consoleLogs.scrollTop = consoleLogs.scrollHeight; 
+
     allLogs.push({ 
         type, 
         text: textWithTime, 
@@ -215,12 +248,11 @@ function writeLog(type, text, eventName = '', rawData = null) {
     localStorage.setItem('terminal_logs_backup', JSON.stringify(allLogs));
 }
 
-// Menangani Update Tampilan Teks Status dan Warna Indikator Secara Realtime Global
+// Menangani Update Tampilan Teks Status dan Warna Indikator
 function updateStatusUI(status) {
     const statusText = document.getElementById('statusText');
     const cardStatus = document.getElementById('cardStatus');
     const statusDot = document.getElementById('statusDot');
-
     let currentStatus = (status || 'disconnected').toLowerCase();
 
     if (currentStatus === 'connected') {
@@ -266,7 +298,6 @@ async function sendSandboxMessage() {
         payloadBody = { text: content };
     }
 
-    // Melakukan request post backend send message
     try {
         const res = await fetch('/api/whatsapp/send', {
             method: 'POST',
@@ -286,19 +317,19 @@ async function sendSandboxMessage() {
     }
 }
 
-// Inisiasi Mesin Sesi (Bawaan Asli)
+// Inisiasi Mesin Sesi
 async function initiateSession() {
     writeLog('info', 'Mengirim perintah inisiasi sesi runtime ke kluster server...');
     socket.emit('init_session');
 }
 
-// Generate QR Code (Bawaan Asli)
+// Generate QR Code
 async function requestQR() {
     writeLog('info', 'Meminta generate QR stream parameter...');
     socket.emit('get_qr');
 }
 
-// Generate Pairing Code (Bawaan Asli)
+// Generate Pairing Code
 async function requestPairingCode() {
     const phoneInput = document.getElementById('pairingPhone');
     const phone = phoneInput ? phoneInput.value.trim() : '';
@@ -327,7 +358,7 @@ function renderSessionTable(status) {
     `;
 }
 
-// Hapus Sesi Paksa (Bawaan Asli dengan Pembersihan Cache Local)
+// Hapus Sesi Paksa 
 function deleteSession() {
     if(confirm('Apakah Anda yakin ingin menghapus paksa sesi ini dari storage?')) {
         socket.emit('terminate_session');
@@ -352,7 +383,20 @@ function clearConsole() {
     localStorage.removeItem('terminal_logs_backup');
 }
 
-// Filter Log Terminal (Bawaan Asli dengan Fitur Baru)
+// Reset Paksa Semua Storage Debugger App
+function clearAllAppCache() {
+    if (confirm("Apakah Anda yakin ingin mengosongkan semua cadangan data metrik lokal dan log terminal di browser? (Sesi login akun Anda akan tetap aman)")) {
+        localStorage.removeItem('terminal_logs_backup');
+        localStorage.removeItem('metric_msg_count');
+        localStorage.removeItem('metric_group_count');
+        localStorage.removeItem('metric_event_count');
+        localStorage.removeItem('wa_current_status');
+        alert("Semua cache lokal dibersihkan! Silakan muat ulang (refresh) halaman.");
+        window.location.reload();
+    }
+}
+
+// Filter Log Terminal 
 function filterLogs() {
     const query = document.getElementById('logSearch').value.toLowerCase();
     const showMsg = document.getElementById('f-msg').checked;
@@ -424,7 +468,7 @@ function toggleSidebar() {
     if (sidebar) sidebar.classList.toggle('open');
 }
 
-// Keluar Aplikasi (Bawaan Asli)
+// Keluar Aplikasi
 function logout() {
     if(confirm("Apakah Anda yakin ingin keluar dari sistem?")) {
         localStorage.clear();
