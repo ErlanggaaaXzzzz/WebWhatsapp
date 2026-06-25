@@ -77,6 +77,7 @@ function initSocket() {
     });
 
     // Event Listener Utama Aliran Data Event Baileys Pipeline
+        // Event Listener Utama Aliran Data Event Baileys Pipeline
     socket.on('whatsapp_event', (evt) => {
         // Hitung metrik pesan masuk secara realtime
         if (evt.event === 'messages.upsert') {
@@ -104,17 +105,21 @@ function initSocket() {
         if (evt.event.includes('connection')) category = 'info';
         if (evt.event.includes('messages.upsert')) category = 'message';
 
-        // FIX JSON: Penataan Payload JSON Supaya Teratur ke Bawah (Indentasi 2 Spasi)
-        let formattedJSON = "";
+        // Parsing data asli ke bentuk Object/JSON asli (bukan cuma string)
+        let rawObj = null;
         try {
-            let dataObject = typeof evt.data === 'string' ? JSON.parse(evt.data) : evt.data;
-            formattedJSON = JSON.stringify(dataObject, null, 2);
+            rawObj = typeof evt.data === 'string' ? JSON.parse(evt.data) : evt.data;
         } catch (e) {
-            formattedJSON = typeof evt.data === 'object' ? JSON.stringify(evt.data, null, 2) : evt.data;
+            rawObj = evt.data;
         }
 
-        writeLog(category, `[${evt.event}]\n${formattedJSON}`, evt.event);
+        // Format tampilan untuk layar console biar rapi berindentasi ke bawah
+        let formattedJSON = JSON.stringify(rawObj, null, 2);
+
+        // Kirim rawObj ke writeLog agar data mentahnya ikut tersimpan komplit
+        writeLog(category, `[${evt.event}]\n${formattedJSON}`, evt.event, rawObj);
     });
+
 }
 
 // Fungsi Manajemen Pergantian Tab (View Switcher) Terintegrasi LocalStorage
@@ -169,22 +174,22 @@ function loadSavedState() {
             allLogs = JSON.parse(savedLogs);
             const consoleLogs = document.getElementById('consoleLogs');
             if (consoleLogs) {
-                consoleLogs.innerHTML = ""; // Bersihkan placeholder
+                consoleLogs.innerHTML = ""; 
                 allLogs.forEach(log => {
                     const row = document.createElement('div');
                     row.className = `log-row log-${log.type}`;
                     row.dataset.event = log.event;
-                    row.innerText = log.text;
+                    row.innerText = log.text; // Menampilkan teks ber-timestamp di screen
                     consoleLogs.appendChild(row);
                 });
-                consoleLogs.scrollTop = consoleLogs.scrollHeight; // Auto-scroll ke bawah
+                consoleLogs.scrollTop = consoleLogs.scrollHeight;
             }
         } catch (e) { console.error("Gagal membaca arsip log.", e); }
     }
 }
 
 // Fungsi Penulis Log Terminal Utama dengan Sistem Cadangan Otomatis
-function writeLog(type, text, eventName = '') {
+function writeLog(type, text, eventName = '', rawData = null) {
     const consoleLogs = document.getElementById('consoleLogs');
     if (!consoleLogs) return;
 
@@ -200,10 +205,15 @@ function writeLog(type, text, eventName = '') {
     consoleLogs.appendChild(row);
     consoleLogs.scrollTop = consoleLogs.scrollHeight; // Gulir otomatis terminal ke bawah
 
-    // Amankan data ke array internal (Sesuai fungsional asli) & backup ke localStorage
-    allLogs.push({ type, text: textWithTime, event: eventName });
+    // Amankan data ke array internal beserta payload mentah (raw) dari server
+    allLogs.push({ 
+        type, 
+        text: textWithTime, 
+        event: eventName,
+        raw: rawData // Menyimpan data mentah beneran (seperti di screenshot)
+    });
     
-    // Batasi cache maksimal 150 baris di browser agar performa tab tetap enteng dan kencang
+    // Batasi cache maksimal 150 baris di browser agar performa tab tetap enteng
     if (allLogs.length > 150) allLogs.shift();
     localStorage.setItem('terminal_logs_backup', JSON.stringify(allLogs));
 }
@@ -326,15 +336,45 @@ function filterLogs() {
 
 // Download Berkas Log Eksternal
 function downloadLogs() {
-    if(allLogs.length === 0) return alert("Belum ada logs data yang terkumpul.");
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allLogs, null, 2));
+    if (allLogs.length === 0) return alert("Belum ada logs data yang terkumpul.");
+    
+    // Jalankan filter dinamis sesuai dengan kondisi checkbox di UI saat ini
+    const query = document.getElementById('logSearch').value.toLowerCase();
+    const showMsg = document.getElementById('f-msg').checked;
+    const showGrp = document.getElementById('f-grp').checked;
+    const showPrs = document.getElementById('f-prs').checked;
+    const showCal = document.getElementById('f-cal').checked;
+    const showCon = document.getElementById('f-con').checked;
+    const showCnt = document.getElementById('f-cnt').checked;
+
+    const filteredExport = allLogs.filter(log => {
+        const evType = log.event || '';
+        const text = log.text.toLowerCase();
+        
+        let matchFilter = true;
+        if (evType.includes('messages.upsert') && !showMsg) matchFilter = false;
+        else if (evType.includes('groups') && !showGrp) matchFilter = false;
+        else if (evType.includes('presence') && !showPrs) matchFilter = false;
+        else if (evType.includes('call') && !showCal) matchFilter = false;
+        else if (evType.includes('connection') && !showCon) matchFilter = false;
+        else if (evType.includes('contacts') && !showCnt) matchFilter = false;
+
+        const matchQuery = text.includes(query);
+        return matchFilter && matchQuery;
+    });
+
+    if (filteredExport.length === 0) return alert("Tidak ada data log yang cocok dengan filter saat ini.");
+
+    // Ekspor data terformat rapi (indentasi 2) berisi log sistem + struktur data mentah asli WA
+    const dataStr = "data:text/json;charset=utf-8 chunks," + encodeURIComponent(JSON.stringify(filteredExport, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `debug-log-${userData.username}.json`);
+    downloadAnchor.setAttribute("download", `debug-raw-log-${userData.username}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
 }
+
 
 // Buka Tutup Sidebar Mobile Mode
 function toggleSidebar() {
