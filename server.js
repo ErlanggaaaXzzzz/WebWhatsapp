@@ -108,41 +108,47 @@ io.use((socket, next) => {
 // SOCKET.IO HUB PIPELINE
 io.on('connection', (socket) => {
     const username = socket.username;
-    // Bergabung dengan kamar terisolasi berdasarkan username uniknya
     socket.join(username);
 
-    // Sinkronisasi status instan saat browser terhubung kembali
+    // Kirim status awal saat user baru konek/refresh web
     if (activeSessions[username]) {
-        io.to(username).emit('whatsapp_status', { status: activeSessions[username].status || 'disconnected' });
+        socket.emit('whatsapp_status', { status: activeSessions[username].status || 'disconnected' });
+        if (activeSessions[username].lastQR) {
+            socket.emit('whatsapp_qr', { qr: activeSessions[username].lastQR });
+        }
     } else {
-        io.to(username).emit('whatsapp_status', { status: 'disconnected' });
+        socket.emit('whatsapp_status', { status: 'disconnected' });
     }
 
-    // Event: Memulai Mesin Sesi Baileys
+    // Event: Inisialisasi Sesi Utama (Kosongan / Default tanpa pairing dulu)
     socket.on('init_session', async () => {
         if (activeSessions[username] && activeSessions[username].status === 'connected') {
             return io.to(username).emit('whatsapp_status', { status: 'connected' });
         }
-        startWhatsAppEngine(username);
+        // Jalankan tanpa nomor hp (untuk standby QR atau auto-reconnect)
+        startWhatsAppEngine(username, null);
     });
 
-    // Event: Request QR Code Manual
+    // Event: Request QR Code Manual (Memaksa engine refresh & dengarkan QR)
     socket.on('get_qr', () => {
-        if (activeSessions[username] && activeSessions[username].lastQR) {
-            io.to(username).emit('whatsapp_qr', { qr: activeSessions[username].lastQR });
-        }
+        // Jika sudah terhubung, tidak perlu QR lagi
+        if (activeSessions[username] && activeSessions[username].status === 'connected') return;
+        
+        // Buat ulang engine tanpa nomor HP untuk mentrigger event 'connection.update' membawa QR
+        startWhatsAppEngine(username, null);
     });
 
-    // Event: Request Pairing Code
+    // Event: Request Pairing Code (Memastikan socket bersih sebelum request)
     socket.on('get_pairing', async (data) => {
         if (!data.phone) return;
-        startWhatsAppEngine(username, data.phone);
+        let cleanPhone = data.phone.replace(/[^0-9]/g, '');
+        // Jalankan engine khusus dengan membawa nomor telepon pairing
+        startWhatsAppEngine(username, cleanPhone);
     });
 
-    // Event: Tutup Paksa dan Hapus Folder Sesi Selesai
     socket.on('terminate_session', () => {
         if (activeSessions[username]) {
-            try { activeSessions[username].sock.logout(); } catch(e){}
+            try { activeSessions[username].sock.end(); } catch(e){}
             delete activeSessions[username];
         }
         const userSessionPath = path.join(SESSIONS_DIR, username);
@@ -153,45 +159,59 @@ io.on('connection', (socket) => {
     });
 });
 
-// CORE ENGINE: KERNEL MANAGER WHATSAPP (BAILEYS MULTI-SESSION INSTANCE)
+// CORE ENGINE YANG DIOPTIMALKAN
 async function startWhatsAppEngine(username, pairingPhone = null) {
     const userSessionPath = path.join(SESSIONS_DIR, username);
     const { state, saveCreds } = await useMultiFileAuthState(userSessionPath);
+
+    // LANGKAH KRISITIAL: Jika ada socket lama yang berjalan, matikan total dulu agar tidak tabrakan
+    if (activeSessions[username] && activeSessions[username].sock) {
+        try {
+            activeSessions[username].sock.ev.removeAllListeners();
+            activeSessions[username].sock.end();
+        } catch (e) {
+            console.log("Mencoba membersihkan socket lama:", e.message);
+        }
+    }
 
     if (!activeSessions[username]) {
         activeSessions[username] = { status: 'connecting', lastQR: null, sock: null };
     }
 
     io.to(username).emit('whatsapp_status', { status: 'connecting' });
+    io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { info: "Initializing Baileys Socket..." } });
 
     const sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false
+        printQRInTerminal: false,
+        browser: ["WA Debugger Professional", "Chrome", "1.0.0"] // Info browser wajib agar pairing valid
     });
 
     activeSessions[username].sock = sock;
 
-    // Menangani Alur Pairing Code
+    // Logika Request Pairing Code (Wajib dieksekusi sebelum ada intervensi koneksi lain)
     if (pairingPhone && !sock.authState.creds.registered) {
+        // Beri jeda 1.5 detik agar socket siap seutuhnya sebelum menembak request ke server WA
         setTimeout(async () => {
             try {
-                let code = await sock.requestPairingCode(pairingPhone.replace(/[^0-9]/g, ''));
+                io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { info: `Requesting pairing code untuk ${pairingPhone}...` } });
+                let code = await sock.requestPairingCode(pairingPhone);
                 io.to(username).emit('whatsapp_pairing', { code });
+                io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { info: `Pairing code berhasil didapatkan: ${code}` } });
             } catch (err) {
-                io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { error: 'Gagal membuat pairing code' } });
+                console.error("Gagal mendapatkan pairing code:", err);
+                io.to(username).emit('whatsapp_event', { event: 'connection.update', data: { error: 'Gagal generate pairing code, coba klik sekali lagi.' } });
             }
-        }, 3000);
+        }, 1500);
     }
 
-    // SINKRONISASI UPDATE CREDENTIALS
     sock.ev.on('creds.update', saveCreds);
 
-    // SINKRONISASI EVENT CONNECTION UPDATE
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         
-        if (qr) {
+        if (qr && !pairingPhone) { // Hanya render QR jika user tidak sedang meminta pairing code
             QRCode.toDataURL(qr, (err, url) => {
                 if (!err) {
                     activeSessions[username].lastQR = url;
@@ -201,13 +221,17 @@ async function startWhatsAppEngine(username, pairingPhone = null) {
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+            const statusCode = (lastDisconnect?.error)?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            
             activeSessions[username].status = 'disconnected';
             activeSessions[username].lastQR = null;
             io.to(username).emit('whatsapp_status', { status: 'disconnected' });
             
+            // Auto reconnect jika bukan karena logout sengaja
             if (shouldReconnect) {
-                startWhatsAppEngine(username);
+                console.log(`Koneksi terputus (Reason: ${statusCode}), mencoba menyambungkan ulang...`);
+                startWhatsAppEngine(username, null);
             }
         } else if (connection === 'open') {
             activeSessions[username].status = 'connected';
@@ -218,7 +242,7 @@ async function startWhatsAppEngine(username, pairingPhone = null) {
         io.to(username).emit('whatsapp_event', { event: 'connection.update', data: update });
     });
 
-    // DAFTAR EVENT LISTENER PENUH UNTUK LIVE DEBUGGER PIPELINE
+    // Pipa Log Event Kolektor
     const targetEvents = [
         'messages.upsert', 'messages.update', 'messages.delete',
         'group-participants.update', 'groups.update', 'contacts.update',
@@ -227,11 +251,11 @@ async function startWhatsAppEngine(username, pairingPhone = null) {
 
     targetEvents.forEach(eventName => {
         sock.ev.on(eventName, (data) => {
-            // Emisi event mentah ke user pemilik sesi
             io.to(username).emit('whatsapp_event', { event: eventName, data });
         });
     });
 }
+
 
 // Jalankan Engine Server Utama
 server.listen(PORT, () => {
