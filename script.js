@@ -101,20 +101,25 @@ function initSocket() {
 
 // Fungsi Update Komponen UI Secara Global
 function updateStatusUI(status) {
-    const badgeStatus = document.getElementById('currentStatusBadge'); // Sesuaikan dengan id badge status kamu
-    const textStatus = document.querySelectorAll('.session-status-text'); // Jika ada teks status lain
+    const statusText = document.getElementById('statusText');
+    const cardStatus = document.getElementById('cardStatus');
+    const statusDot = document.getElementById('statusDot');
 
-    if (badgeStatus) {
-        badgeStatus.innerText = status.toUpperCase();
-        if (status === 'connected') {
-            badgeStatus.className = "badge bg-success"; // Hijau jika terkoneksi
-        } else if (status === 'connecting') {
-            badgeStatus.className = "badge bg-warning text-dark"; // Kuning jika loading
-        } else {
-            badgeStatus.className = "badge bg-danger"; // Merah jika disconneted
-        }
+    if (status === 'connected') {
+        if(statusText) { statusText.innerText = "CONNECTED"; statusText.style.color = "#00ff87"; }
+        if(cardStatus) { cardStatus.innerText = "CONNECTED"; cardStatus.style.color = "#00ff87"; }
+        if(statusDot) { statusDot.className = "status-dot connected"; }
+    } else if (status === 'connecting') {
+        if(statusText) { statusText.innerText = "CONNECTING..."; statusText.style.color = "#ffc107"; }
+        if(cardStatus) { cardStatus.innerText = "CONNECTING..."; cardStatus.style.color = "#ffc107"; }
+        if(statusDot) { statusDot.className = "status-dot connecting"; }
+    } else {
+        if(statusText) { statusText.innerText = "DISCONNECTED"; statusText.style.color = "#ef4444"; }
+        if(cardStatus) { cardStatus.innerText = "DISCONNECTED"; cardStatus.style.color = "#ef4444"; }
+        if(statusDot) { statusDot.className = "status-dot disconnected"; }
     }
 }
+
 
 
 // Manajemen Perpindahan View Tab Dashboard
